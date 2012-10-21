@@ -136,28 +136,43 @@ def make_row_factory(field_types):
                     for i, (key, conv) in enumerate(field_types))
 
 
-
 class TableManager(object):
+    """Manage a set of tables for a Lightstreamer client. Use table_factory()
+    when the first caller requests a table, and later destroy it when the last
+    caller unsubscribes."""
     def __init__(self, client):
+        """Create an instance associated with the LsClient `client`."""
         self.client = client
         self.table_map = {}
-        self.func_set = set()
+        self.func_map = {}
 
     def key_func(self, key):
+        """Map a key as necessary; default implementation simply returns the
+        original key."""
         return key
 
     def listen(self, func, key=None):
+        """Subscribe `func` to updates for `key``."""
         key = self.key_func(key)
         if key not in self.table_map:
             self.table_map[key] = self.table_factory(key)
-        self.func_set.add(func)
+            self.table_map[key].on_change(
+                lambda row_id, row: self._on_change(key, row_id, row))
+        self.func_set.setdefault(key, set()).add(func)
 
-    def unlisten(self, key, func):
+    def unlisten(self, func, key=None):
+        """Unsubscribe `func` from updates for `key`, destroying the
+        Lightstreamer subscription if it was the last interested function."""
         if key in self.table_map:
-            self.func_set.discard(func)
-            if not self.func_set:
+            self.func_set[key].discard(func)
+            if not self.func_set[key]:
                 table = self.table_map.pop(key)
                 table.delete()
+
+    def _on_change(self, key, row_id, row):
+        """Invoked when any table has changed; forward the changed row to
+        subscribed functions."""
+        lightstreamer.dispatch(self.func_set[key], row_id, row)
 
 
 class PriceTableManager(TableManager):
@@ -188,7 +203,7 @@ class TradeMarginTableManager(TableManager):
 
     def table_factory(self, key):
         return lightstreamer.Table(self.client,
-            data_adapter=AS_ACCOUNT,
+            data_adapter=DA_TRADE_MARGIN,
             item_ids='TRADEMARGIN.ALL',
             mode=lightstreamer.MODE_MERGE,
             schema=' '.join(TRADE_MARGIN_FIELDS))
@@ -238,7 +253,6 @@ class CiStreamingClient(object):
     @util.cached_property
     def trade_margin(self):
         return TradeMarginTableManager(self._get_client('ZErp'))
-        client = self._make
 
     @util.cached_property
     def default(self):
