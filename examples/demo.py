@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import logging
 import signal
 import sys
+import time
 
 import cityindex
 
@@ -28,8 +29,8 @@ def main():
     for market in api.list_cfd_markets(max_results=1):
         streamer.prices.listen(on_price_update, market['MarketId'])
 
-    while signal.pause():
-        pass
+    time.sleep(10)
+    streamer.stop()
 
 
 if __name__ == '__main__':

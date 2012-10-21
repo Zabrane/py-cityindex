@@ -213,6 +213,7 @@ class CiStreamingClient(object):
         self.api = api
         self.log = logging.getLogger('CiStreamingClient')
         self._client_map = {}
+        self._stopped = False
 
     def _get_client(self, adapter_set):
         """Create an LsClient instance connected to the given `adapter_set."""
@@ -223,6 +224,16 @@ class CiStreamingClient(object):
                 password=self.api.session_id)
             self._client_map[adapter_set] = client
         return client
+
+    def stop(self, join=True):
+        """Shut down the streaming client. If `join` is True, don't return
+        until all connections are closed."""
+        self._stopped = True
+        for client in self._client_map.itervalues():
+            client.destroy()
+        if join:
+            for client in self._client_map.itervalues():
+                client.join()
 
     @util.cached_property
     def trade_margin(self):
