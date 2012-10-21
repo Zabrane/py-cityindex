@@ -23,6 +23,8 @@ import urllib
 import urllib2
 import urlparse
 
+from cityindex import util
+
 
 # Production.
 LIVE_API_URL = 'https://ciapi.cityindex.com/tradingapi/'
@@ -85,8 +87,11 @@ class CiApiClient:
         self.log = logging.getLogger('CiApiClient')
         self.session_id = None
         self._client_account_id = None
+        # Docs say no more than 50reqs/5sec.
+        self._bucket = util.LeakyBucket(10, 10)
 
     def _request(self, path):
+        self._bucket.get()
         req = urllib2.Request(urlparse.urljoin(self.url, path))
         if self.session_id:
             req.add_header('UserName', self.username)
