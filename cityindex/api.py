@@ -28,6 +28,7 @@ from cityindex import util
 # Production.
 LIVE_API_URL = 'https://ciapi.cityindex.com/tradingapi/'
 TEST_API_URL = 'https://ciapipreprod.cityindextest9.co.uk/tradingapi/'
+REQS_PER_SEC = 10
 
 
 #
@@ -75,7 +76,7 @@ class CiApiClient:
         self.session_id = None
         self._client_account_id = None
         # Docs say no more than 50reqs/5sec.
-        self._bucket = util.LeakyBucket(10, 10)
+        self._bucket = util.LeakyBucket(REQS_PER_SEC, REQS_PER_SEC)
 
     def _request(self, path):
         self._bucket.get()
