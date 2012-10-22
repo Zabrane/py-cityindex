@@ -29,6 +29,8 @@ def main():
 
     level = logging.DEBUG if opts.debug else logging.INFO
     logging.basicConfig(level=level)
+    if not opts.debug:
+        logging.getLogger('requests').setLevel(logging.ERROR)
 
     api = cityindex.CiApiClient(cityindex.LIVE_API_URL,
         opts.username, opts.password)
@@ -36,11 +38,9 @@ def main():
 
     streamer = cityindex.CiStreamingClient(cityindex.LIVE_STREAM_URL, api)
     for market in api.list_cfd_markets(max_results=1):
-        streamer.prices.listen(on_price_update, 9949)
         streamer.prices.listen(on_price_update, 99500)
         streamer.prices.listen(on_price_update, 99498)
 
-    #time.sleep(^0)
     raw_input()
     streamer.stop()
 
