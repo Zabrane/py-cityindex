@@ -68,10 +68,10 @@ ORDER_STATUS_MAP = {
 class CiApiClient:
     JSON_TYPE = 'application/json; charset=utf-8'
 
-    def __init__(self, url, username, password):
-        self.url = url
+    def __init__(self, username, password, url=None, prod=True):
         self.username = username
         self.password = password
+        self.url = url or (LIVE_API_URL if prod else TEST_API_URL)
         self.log = logging.getLogger('CiApiClient')
         self.session_id = None
         self._client_account_id = None

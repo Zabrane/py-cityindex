@@ -26,7 +26,7 @@ LIVE_STREAM_URL = 'https://push.cityindex.com/lightstreamer/'
 TEST_STREAM_URL = 'https://pushpreprod.cityindextest9.co.uk/lightstreamer/'
 
 # IFX Poland operator ID.
-OPERATOR_IFX_POLAND = 'AC2347'
+OPERATOR_IFX_POLAND = 2347
 
 
 #
@@ -53,10 +53,12 @@ AS_TRADING = 'STREAMINGTRADINGACCOUNT'
 DA_CLIENT_MARGIN = 'CLIENTACCOUNTMARGIN'        # AS_ACCOUNT
 DA_NEWS = 'NEWS'                                # AS_STREAMING
 DA_ORDERS = 'ORDERS'                            # AS_ACCOUNT
-DA_PRICES = 'PRICES'                            # AS_STREAMING, AS_DEFAULT
 DA_QUOTE = 'QUOTE'                              # AS_TRADING
-DA_TRADE_MARGIN = 'TRADEMARGIN'                 # AS_ACCOUNT
 
+
+
+def conv_bool(s):
+    return s == 'true'
 
 
 def conv_dt(s):
@@ -64,11 +66,20 @@ def conv_dt(s):
     return datetime.utcfromtimestamp(float(util.json_fixup('"%s"' % s)))
 
 
-#
-# Lightstreamer topic names.
-#
-
-TOPIC_CLIENT_MARGIN = 'CLIENTACCOUNTMARGIN.ALL'
+# ClientAccountMarginDTO
+ACCOUNT_MARGIN_FIELD_TYPES = (
+    ('Cash', float),
+    ('Margin', float),
+    ('MarginIndicator', float),
+    ('NetEquity', float),
+    ('OpenTradeEquity', float),
+    ('TradeableFunds', float),
+    ('PendingFunds', float),
+    ('TradingResource', float),
+    ('TotalMarginRequirement', float),
+    ('CurrencyId', int),
+    ('CurrencyISO', unicode)
+)
 
 
 # PriceDTO
@@ -84,6 +95,58 @@ PRICE_FIELD_TYPES = (
     ('Direction', int),
     ('AuditId', unicode),
     ('StatusSummary', int)
+)
+
+
+# NewsDTO
+NEWS_FIELD_TYPES = (
+    ('StoryId', int),
+    ('Headline', unicode),
+    ('PublishDate', conv_dt)
+)
+
+
+# OrderDTO
+ORDERS_FIELD_TYPES = (
+    ('OrderID', int),
+    ('MarketID', int),
+    ('ClientAccountID', int),
+    ('TradingAccountID', int),
+    ('CurrencyID', int),
+    ('CurrencyISO', unicode),
+    ('Direction', int),
+    ('AutoRollover', conv_bool),
+    ('LastChangedTime', conv_dt),
+    ('OpenPrice', float),
+    ('OriginalLastChangedDateTime', conv_dt),
+    ('OriginalQuantity', float),
+    ('PositionMethodId', int),
+    ('Quantity', float),
+    ('Type', unicode),
+    ('Status', unicode),
+    ('ReasonId', int)
+)
+
+
+# QuoteDTO
+QUOTE_FIELD_TYPES = (
+    ('QuoteId', int),
+    ('OrderId', int),
+    ('MarketId', int),
+    ('BidPrice', float),
+    ('BidAdjust', float),
+    ('OfferPrice', float),
+    ('OfferAdjust', float),
+    ('Quantity', float),
+    ('CurrencyId', int),
+    ('StatusId', int),
+    ('TypeId', int),
+    ('RequestDateTimeUTC', conv_dt),
+    ('ApprovalDateTimeUTC', conv_dt),
+    ('BreathTimeSecs', int),
+    ('IsOversize', conv_bool),
+    ('ReasonId', int),
+    ('TradingAccountId', int)
 )
 
 
@@ -107,26 +170,10 @@ TRADE_MARGIN_FIELD_TYPES = (
 )
 
 
-# ClientAccountMarginDTO
-ACCOUNT_MARGIN_FIELD_TYPES = (
-    ('Cash', float),
-    ('Margin', float),
-    ('MarginIndicator', float),
-    ('NetEquity', float),
-    ('OpenTradeEquity', float),
-    ('TradeableFunds', float),
-    ('PendingFunds', float),
-    ('TradingResource', float),
-    ('TotalMarginRequirement', float),
-    ('CurrencyId', int),
-    ('CurrencyISO', unicode)
-)
-
-
-
-PRICE_FIELDS = tuple(p[0] for p in PRICE_FIELD_TYPES)
-TRADE_MARGIN_FIELDS = tuple(p[0] for p in TRADE_MARGIN_FIELD_TYPES)
-ACCOUNT_MARGIN_FIELDS = tuple(p[0] for p in ACCOUNT_MARGIN_FIELD_TYPES)
+def schema_for_type(types):
+    """Return the Lightstreamer table schema corresponding to a list of field
+    types."""
+    return ' '.join(p[0] for p in types)
 
 
 def make_row_factory(field_types):
@@ -188,13 +235,27 @@ class TableManager(object):
         lightstreamer.dispatch(self.func_map[key], row)
 
 
+class AccountMarginTableManager(TableManager):
+    def key_func(self, key):
+        """"""
+
+    def table_factory(self, key):
+        return lightstreamer.Table(self.client,
+            data_adapter=DA_CLIENT_MARGIN,
+            item_ids='CLIENTACCOUNTMARGIN.ALL',
+            mode=lightstreamer.MODE_MERGE,
+            schema=schema_for_type(ACCOUNT_MARGIN_FIELD_TYPES),
+            row_factory=make_row_factory(ACCOUNT_MARGIN_FIELD_TYPES)
+        )
+
+
 class PriceTableManager(TableManager):
     def table_factory(self, market_id):
         return lightstreamer.Table(self.client,
-            data_adapter=DA_PRICES,
+            data_adapter='PRICES',
             item_ids='PRICE.%d' % market_id,
             mode=lightstreamer.MODE_MERGE,
-            schema=' '.join(PRICE_FIELDS),
+            schema=schema_for_type(PRICE_FIELD_TYPES),
             row_factory=make_row_factory(PRICE_FIELD_TYPES)
         )
 
@@ -202,10 +263,11 @@ class PriceTableManager(TableManager):
 class DefaultTableManager(TableManager):
     def table_factory(self, operator_id):
         return lightstreamer.Table(self.client,
-            data_adapter=ADAPTER_PRICES,
+            data_adapter='PRICES',
             item_ids='AC%s' % operator_id,
             mode=lightstreamer.MODE_MERGE,
-            schema=' '.join(PRICE_FIELDS)
+            schema=schema_for_type(PRICE_FIELD_TYPES),
+            row_factory=make_row_factory(PRICE_FIELD_TYPES)
         )
 
 
@@ -216,10 +278,26 @@ class TradeMarginTableManager(TableManager):
 
     def table_factory(self, key):
         return lightstreamer.Table(self.client,
-            data_adapter=DA_TRADE_MARGIN,
-            item_ids='TRADEMARGIN.ALL',
+            data_adapter='TRADEMARGIN',
+            item_ids='ALL',
             mode=lightstreamer.MODE_MERGE,
-            schema=' '.join(TRADE_MARGIN_FIELDS))
+            schema=schema_for_type(TRADE_MARGIN_FIELD_TYPES),
+            row_factory=make_row_factory(TRADE_MARGIN_FIELD_TYPES)
+        )
+
+
+class OrderTableManager(TableManager):
+    def key_func(self, key):
+        """Many any provided key to None; there is only one channel."""
+
+    def table_factory(self, key):
+        return lightstreamer.Table(self.client,
+            data_adapter=DA_ORDERS,
+            item_ids='ORDERS',
+            mode=lightstreamer.MODE_MERGE,
+            schema=schema_for_type(ORDERS_FIELD_TYPES),
+            row_factory=make_row_factory(ORDERS_FIELD_TYPES)
+        )
 
 
 class QuoteTableManager(TableManager):
@@ -229,16 +307,18 @@ class QuoteTableManager(TableManager):
 
     def table_factory(self, key):
         return lightstreamer.Table(self.client,
-            data_adapter=DA_TRADING,
-            item_ids='QUOTE.ALL',
+            data_adapter='QUOTE',
+            item_ids='ALL',
             mode=lightstreamer.MODE_MERGE,
-            schema=' '.join(QUOTE_FIELDS))
+            schema=schema_for_type(QUOTE_FIELD_TYPES),
+            row_factory=make_row_factory(QUOTE_FIELD_TYPES)
+        )
 
 
 class CiStreamingClient(object):
-    def __init__(self, base_url, api):
-        self.base_url = base_url
+    def __init__(self, api, url=None, prod=True):
         self.api = api
+        self.url = url or (LIVE_STREAM_URL if prod else TEST_STREAM_URL)
         self.log = logging.getLogger('CiStreamingClient')
         self._client_map = {}
         self._stopped = False
@@ -247,7 +327,7 @@ class CiStreamingClient(object):
         """Create an LsClient instance connected to the given `adapter_set."""
         client = self._client_map.get(adapter_set)
         if not client:
-            client = lightstreamer.LsClient(self.base_url, content_length=1<<20)
+            client = lightstreamer.LsClient(self.url, content_length=1<<20)
             client.create_session(self.api.username, adapter_set=adapter_set,
                 password=self.api.session_id)
             self._client_map[adapter_set] = client
@@ -264,14 +344,23 @@ class CiStreamingClient(object):
                 client.join()
 
     @util.cached_property
+    def account_margin(self):
+        return AccountMarginTableManager(self._get_client(AS_ACCOUNT))
+
+    @util.cached_property
     def trade_margin(self):
-        return TradeMarginTableManager(self._get_client('ZErp'))
+        return TradeMarginTableManager(self._get_client(AS_ACCOUNT))
 
     @util.cached_property
     def default(self):
         """Listen to the stream of default prices for the given operator ID.
         `func` receives a Price instance each time the price updates."""
         return DefaultTableManager(self._get_client(AS_DEFAULT))
+
+    @util.cached_property
+    def orders(self):
+        """Listen to order status for the active user account."""
+        return OrderTableManager(self._get_client(AS_ACCOUNT))
 
     @util.cached_property
     def prices(self):
@@ -281,4 +370,4 @@ class CiStreamingClient(object):
     @util.cached_property
     def quotes(self):
         """Listen to quote updates for the user's account."""
-        return QuoteTableManager(self._geT_client(AS_TRADING))
+        return QuoteTableManager(self._get_client(AS_TRADING))

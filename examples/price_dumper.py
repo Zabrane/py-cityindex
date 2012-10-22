@@ -1,15 +1,9 @@
 #!/usr/bin/env python
 
-"""Given a list of RICs on the command line, find the corresponding CityIndex
-market ID and print it to stdout.
-
-PYTHONPATH=. examples/ric_lookup.py --username=.. --password=.. --cfd --suffix=.L  $(< examples/ftse.syms ) 
-"""
-
 from __future__ import absolute_import
 
 import csv
-import optparse
+import math
 import sys
 import threading
 
@@ -23,7 +17,6 @@ def main(opts, args, api, streamer):
         return
 
     api.login()
-
     if opts.spread:
         method = api.list_spread_markets
     else:
@@ -39,20 +32,26 @@ def main(opts, args, api, streamer):
         with lock:
             writer.writerow(row)
 
-    write('RIC', 'MarketId', 'Description')
+    def dump(pr):
+        sprd = pr['Offer'] - pr['Bid']
+        s, market = markets[pr['MarketId']]
+        write(pr['TickDate'].strftime('%H:%M:%S.%f'),
+              s.upper(),
+              pr['Price'], sprd, pr['Bid'], pr['Offer'],
+              pr['High'], pr['Low'],
+              pr['Change'])
 
-    def lookup(ric):
-        matches = method(code=ric)
-        if matches:
-            market = matches[0]
-            write(ric.upper(), market['MarketId'], market['Name'])
-        else:
-            write(ric.upper(), '-', '-')
+    markets, unknown = base.threaded_lookup(method, args)
+    if unknown:
+        print '# Unknown:', ', '.join(unknown)
 
-    tp = base.ThreadPool()
-    for ric in args:
-        tp.put(lookup, ric)
-    tp.join()
+    for market_id, (ric, market) in markets.iteritems():
+        streamer.prices.listen(dump, market_id)
+
+    write('Date', 'RIC', 'Price', 'Spread', 'Bid', 'Offer', 'High', 'Low', 'Change')
+    raw_input()
+    streamer.stop()
+
 
 if __name__ == '__main__':
     base.main_wrapper(main)
