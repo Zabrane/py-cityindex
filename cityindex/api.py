@@ -192,3 +192,11 @@ class CiApiClient:
             'ClientAccountId': self.client_account_id,
             'MaxResults': max_results
         })['Markets']
+
+    def list_spread_markets(self, name=None, code=None, max_results=200):
+        return self._get('spread/markets', {
+            'MarketName': name or '',
+            'MarketCode': code or '',
+            'ClientAccountId': self.client_account_id,
+            'MaxResults': max_results
+        })['Markets']
