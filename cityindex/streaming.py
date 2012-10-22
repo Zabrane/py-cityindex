@@ -61,7 +61,7 @@ DA_TRADE_MARGIN = 'TRADEMARGIN'                 # AS_ACCOUNT
 
 def conv_dt(s):
     from datetime import datetime
-    return datetime.utcfromtimestamp(float(_json_fixup('"%s"' % s)))
+    return datetime.utcfromtimestamp(float(util.json_fixup('"%s"' % s)))
 
 
 #
@@ -132,8 +132,9 @@ ACCOUNT_MARGIN_FIELDS = tuple(p[0] for p in ACCOUNT_MARGIN_FIELD_TYPES)
 
 def make_row_factory(field_types):
     def row_factory(row):
-        return dict((key, conv(row[i]))
+        return dict((key, conv(row[i]) if row[i] is not None else None)
                     for i, (key, conv) in enumerate(field_types))
+    return row_factory
 
 
 class TableManager(object):
@@ -156,23 +157,23 @@ class TableManager(object):
         key = self.key_func(key)
         if key not in self.table_map:
             self.table_map[key] = self.table_factory(key)
-            self.table_map[key].on_change(
-                lambda row_id, row: self._on_change(key, row_id, row))
-        self.func_set.setdefault(key, set()).add(func)
+            self.table_map[key].on_update(
+                lambda item_id, row: self._on_update(key, row))
+        self.func_map.setdefault(key, set()).add(func)
 
     def unlisten(self, func, key=None):
         """Unsubscribe `func` from updates for `key`, destroying the
         Lightstreamer subscription if it was the last interested function."""
         if key in self.table_map:
-            self.func_set[key].discard(func)
-            if not self.func_set[key]:
+            self.func_map[key].discard(func)
+            if not self.func_map[key]:
                 table = self.table_map.pop(key)
                 table.delete()
 
-    def _on_change(self, key, row_id, row):
+    def _on_update(self, key, row):
         """Invoked when any table has changed; forward the changed row to
         subscribed functions."""
-        lightstreamer.dispatch(self.func_set[key], row_id, row)
+        lightstreamer.dispatch(self.func_map[key], row)
 
 
 class PriceTableManager(TableManager):

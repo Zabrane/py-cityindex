@@ -18,7 +18,6 @@ from __future__ import absolute_import
 
 import json
 import logging
-import re
 import urllib
 import urllib2
 import urlparse
@@ -65,18 +64,6 @@ ORDER_STATUS_MAP = {
 }
 
 
-# Bizarre format is "/Date(UNIXTIMEINMS[-OFFSET])/" where [-OFFSET] is
-# optional.
-MS_DATE_RE = '["\']\\\\/Date\\(([0-9]+?(?:-[^)]+)?)\\)\\\\/["\']'
-
-def _json_fixup(s):
-    """Replace crappy Microsoft JSON date with a Javascript-ish
-    milliseconds-since-epoch. "\/Date(1343067900000)\/" becomes 1343067900.0.
-    """
-    repl = lambda match: str(float(match.group(1)) / 1000)
-    return re.sub(MS_DATE_RE, repl, s)
-
-
 class CiApiClient:
     JSON_TYPE = 'application/json; charset=utf-8'
 
@@ -109,7 +96,7 @@ class CiApiClient:
 
         raw = fp.read()
         try:
-            return json.loads(_json_fixup(raw))
+            return json.loads(util.json_fixup(raw))
         except ValueError, e:
             raise ValueError('%r (%r)' % (e, raw))
 
