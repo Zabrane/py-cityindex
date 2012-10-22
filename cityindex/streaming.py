@@ -129,8 +129,20 @@ TRADE_MARGIN_FIELDS = tuple(p[0] for p in TRADE_MARGIN_FIELD_TYPES)
 ACCOUNT_MARGIN_FIELDS = tuple(p[0] for p in ACCOUNT_MARGIN_FIELD_TYPES)
 
 
-
 def make_row_factory(field_types):
+    """Return a function that, when passed a sequence of strings-or-None,
+    passes each value through a converter function if it is non-None, and uses
+    the result to form a dict.
+
+    Example:
+        >>> func = make_row_factory([
+        ...     ('FieldA', float),
+        ...     ('FieldB', unicode),
+        ...     ('FieldC', int)
+        ... ])
+        >>> print func(['1234', 'test', None])
+        {'FieldA': 1234.0, 'FieldB': u'test', 'FieldC': None}
+    """
     def row_factory(row):
         return dict((key, conv(row[i]) if row[i] is not None else None)
                     for i, (key, conv) in enumerate(field_types))
