@@ -261,6 +261,7 @@ class CiStreamingClient(object):
 
     Example:
         api = CiClientApi('DM12345678', 'password')
+        api.login()
         streamer = CiStreamingApi(api)
 
         def on_uk100_change(price):
