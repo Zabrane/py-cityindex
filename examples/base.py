@@ -65,7 +65,7 @@ def threaded_lookup(method, strs):
     unknown = []
 
     def lookup(s):
-        matches = method(code=s)
+        matches = method(s)
         if matches:
             markets[matches[0]['MarketId']] = s, matches[0]
         else:

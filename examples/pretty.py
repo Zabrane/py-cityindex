@@ -2,12 +2,7 @@
 
 from __future__ import absolute_import
 
-import math
-import os
-import sys
-import threading
-import time
-
+import logging
 import urwid
 
 import cityindex
@@ -18,36 +13,41 @@ class Table(object):
     def __init__(self, row_key):
         self.row_key = row_key
         self._fields = []
+        self._align_map = {}
         self._field_pile_map = {}
         self._field_formatter_map = {}
         self._row_fields_map = {}
         self._row_data = {}
-        self._columns = urwid.Columns([], dividechars=2)
+        self._cols = []
 
-    def add_field(self, name, formatter):
+    def add_field(self, name, formatter, width=None, align='right'):
         self._fields.append(name)
-        title = urwid.Text([('title', name)])
+        title = urwid.Text([('title', name)], align=align)
+        self._align_map[name] = align
         pile = urwid.Pile([title])
         self._field_pile_map[name] = pile
         self._field_formatter_map[name] = formatter
-        self._columns.widget_list.append(pile)
+        if width:
+            pile = ('fixed', width, pile)
+        self._cols.append(pile)
 
     def end_fields(self):
         for field in self._fields:
             self._field_pile_map[field].widget_list.append(urwid.Divider())
+        self._columns = urwid.Columns(self._cols, dividechars=2)
 
     def append(self, row):
         key = self.row_key(row)
         fields = []
         for field in self._fields:
-            fields.append(urwid.Text(''))
+            fields.append(urwid.Text('', self._align_map[field]))
             self._field_pile_map[field].widget_list.append(fields[-1])
         self._row_fields_map[key] = fields
         self.update(row)
 
     def update(self, row):
         key = self.row_key(row)
-        prev = self._row_data.get(key, {})
+        prev = self._row_data.get(key, row)
 
         fields = self._row_fields_map[key]
         for idx, field in enumerate(self._fields):
@@ -55,20 +55,45 @@ class Table(object):
             cur = row.setdefault(field)
             formatter = self._field_formatter_map[field]
             attrs = formatter(last, cur)
-            if attrs is None:
-                attrs = ''
-            elif isinstance(attrs, (int, float)):
-                if last < cur:
+            if isinstance(attrs, (int, float)):
+                attrs = '%.2f' % attrs
+                if last and last < cur:
                     attrs = [('uptick', unicode(attrs))]
-                elif last > cur:
+                elif last and last > cur:
                     attrs = [('downtick', unicode(attrs))]
                 else:
-                    attrs = unicode(attrs)
+                    attrs = [('default', unicode(attrs))]
             elif not isinstance(attrs, (list, tuple)):
-                attrs = unicode(attrs)
+                attrs = [('default', unicode(attrs or ''))]
             fields[idx].set_text(attrs)
         self._row_data[key] = row
 
+
+
+class LogTailer(object):
+    class Handler(logging.Handler):
+        def __init__(self, text):
+            logging.Handler.__init__(self)
+            self.formatter = logging.Formatter(
+                '%(asctime)s %(levelname).1s %(name)s: %(message)s',
+                datefmt='%H:%M:%S')
+            self.hist = []
+            self.text = text
+
+        def emit(self, record):
+            self.hist = self.hist[-20:] + [record]
+            attrs = []
+            for record in reversed(self.hist):
+                if record.levelno == logging.DEBUG:
+                    color = 'debug'
+                else:
+                    color = 'info'
+                attrs.append((color, self.format(record) + '\n'))
+            self.text.set_text(attrs)
+
+    def __init__(self):
+        self.text = urwid.Text(u'')
+        logging.getLogger().handlers = [self.Handler(self.text)]
 
 
 def main(opts, args, api, streamer):
@@ -89,13 +114,16 @@ def main(opts, args, api, streamer):
         ('title', 'yellow', 'default', 'bold'),
         ('uptick', 'white', 'dark green', 'bold'),
         ('downtick', 'white', 'dark red', 'bold'),
+        ('debug', 'light blue', 'default', 'default'),
+        ('info', 'dark green', 'default', 'default'),
         ('I say', 'light red,bold', 'default', 'bold'),
     ]
 
-    reply = urwid.Text(u"")
+    tailer = LogTailer()
+
     button = urwid.Button(u'Exit')
     div = urwid.Divider()
-    pile = urwid.Pile([reply, button])
+    pile = urwid.Pile([button, div, tailer.text])
     top = urwid.Filler(pile, valign='top')
 
     markets = None
@@ -104,13 +132,14 @@ def main(opts, args, api, streamer):
     def on_exit_clicked(button):
         raise urwid.ExitMainLoop()
 
-    #urwid.connect_signal(ask, 'change', on_ask_change)
     urwid.connect_signal(button, 'click', on_exit_clicked)
 
     table = Table(lambda price: price['MarketId'])
-    table.add_field('TickDate', lambda _, cur: cur and cur.strftime('%H:%M:%S.%f'))
-    for field in 'RIC', 'Price', 'Bid', 'Offer', 'High', 'Low', 'Change':
-        table.add_field(field, lambda last, cur: cur)
+    table.add_field('TickDate', lambda _, cur: cur and cur.strftime('%H:%M:%S'),
+        width=8)
+    table.add_field('Name', (lambda last, cur: cur), width=20)
+    for field in 'Price', 'Bid', 'Offer', 'High', 'Low', 'Change':
+        table.add_field(field, (lambda _, cur: cur), width=9)
     table.end_fields()
 
     pp = urwid.Pile([table._columns, urwid.Divider(), pile])
