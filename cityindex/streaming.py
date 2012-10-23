@@ -217,7 +217,70 @@ class TableManager(object):
 
 
 class CiStreamingClient(object):
+    """CityIndex streaming data client.
+
+    This wraps py-lightstreamer to provide a gently normalized view of
+    CityIndex's streaming data sources. For each available source, a property
+    exists that yields a TableManager instance. All that is required to
+    subscribe to some data is to call listen() on this returned instance.
+
+    Unless otherwise specified (for prices and news), call listen() with no
+    key= parameter.
+
+    Supported tables:
+        account_margin:
+            Client account margin updates.
+
+        trade_margin:
+            Per-trade margin updates.
+
+        default:
+            Default prices listener. The key= parameter to listen() selects the
+            operator ID to subscribe to, for example
+            cityindex.OPERATOR_IDX_POLAND.
+
+        orders:
+            Order status updates.
+
+        prices:
+            Market pricing updates. The key= parameter to listen() selects the
+            MarketId to subscribe to, for example 99500 is UK 100. Refer to
+            CiApiClient search methods to retrieve market IDs.
+
+        quotes:
+            Oversized order quotation updates.
+
+        news:
+            News headlines. The key= parameter to listen() selects the news
+            category to subscribe to. Refer to the CIAPI documentation for a
+            list.
+
+    Example:
+
+    api = CiClientApi('DM12345678', 'password')
+    streamer = CiStreamingApi(api)
+
+    def on_uk100_change(price):
+        print 'UK 100:', price['Price']
+    streamer.prices.listen(on_uk100_change, 99500)
+
+    def on_news(headline):
+        print 'UK NEWS:', news['Headline']
+    streamer.news.listen(on_news, 'UK')
+
+    # Get bored, so unsubscribe.
+    streamer.news.unlisten(on_news, 'UK')
+
+    def on_order_changed(order):
+        print 'ORDER:', order
+    streamer.orders.listen(on_order_changed)
+
+    # Do useful work, decide to shutdown.
+    streamer.stop()
+    """
     def __init__(self, api, url=None, prod=True):
+        """Create an instance using the API session from CiApiClient instance
+        `api`."""
         self.api = api
         self.url = url or (LIVE_STREAM_URL if prod else TEST_STREAM_URL)
         self.log = logging.getLogger('CiStreamingClient')
