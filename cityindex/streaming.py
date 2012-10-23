@@ -46,17 +46,6 @@ AS_STREAMING = 'CITYINDEXSTREAMING'
 AS_TRADING = 'STREAMINGTRADINGACCOUNT'
 
 
-#
-# Data adapters.
-#
-
-DA_CLIENT_MARGIN = 'CLIENTACCOUNTMARGIN'        # AS_ACCOUNT
-DA_NEWS = 'NEWS'                                # AS_STREAMING
-DA_ORDERS = 'ORDERS'                            # AS_ACCOUNT
-DA_QUOTE = 'QUOTE'                              # AS_TRADING
-
-
-
 def conv_bool(s):
     return s == 'true'
 
@@ -67,7 +56,7 @@ def conv_dt(s):
 
 
 # ClientAccountMarginDTO
-ACCOUNT_MARGIN_FIELD_TYPES = (
+MARGIN_FIELDS = (
     ('Cash', float),
     ('Margin', float),
     ('MarginIndicator', float),
@@ -83,8 +72,9 @@ ACCOUNT_MARGIN_FIELD_TYPES = (
 
 
 # PriceDTO
-PRICE_FIELD_TYPES = (
+PRICE_FIELDS = (
     ('MarketId', int),
+    ('Name', unicode),
     ('TickDate', conv_dt),
     ('Bid', float),
     ('Offer', float),
@@ -99,7 +89,7 @@ PRICE_FIELD_TYPES = (
 
 
 # NewsDTO
-NEWS_FIELD_TYPES = (
+NEWS_fields = (
     ('StoryId', int),
     ('Headline', unicode),
     ('PublishDate', conv_dt)
@@ -107,7 +97,7 @@ NEWS_FIELD_TYPES = (
 
 
 # OrderDTO
-ORDERS_FIELD_TYPES = (
+ORDER_FIELDS = (
     ('OrderID', int),
     ('MarketID', int),
     ('ClientAccountID', int),
@@ -129,7 +119,7 @@ ORDERS_FIELD_TYPES = (
 
 
 # QuoteDTO
-QUOTE_FIELD_TYPES = (
+QUOTE_FIELDS = (
     ('QuoteId', int),
     ('OrderId', int),
     ('MarketId', int),
@@ -151,7 +141,7 @@ QUOTE_FIELD_TYPES = (
 
 
 # TradeMarginDTO
-TRADE_MARGIN_FIELD_TYPES = (
+TRADE_MARGIN_FIELDS = (
     ('ClientAccountId', int),
     ('DirectionId', int),
     ('MarginRequirementConverted', float),
@@ -170,13 +160,15 @@ TRADE_MARGIN_FIELD_TYPES = (
 )
 
 
-def schema_for_type(types):
-    """Return the Lightstreamer table schema corresponding to a list of field
-    types."""
-    return ' '.join(p[0] for p in types)
+# NewsDTO
+NEWS_FIELDS = (
+    ('StoryId', int),
+    ('Headline', unicode),
+    ('PublishDate', unicode)
+)
 
 
-def make_row_factory(field_types):
+def make_row_factory(fields):
     """Return a function that, when passed a sequence of strings-or-None,
     passes each value through a converter function if it is non-None, and uses
     the result to form a dict.
@@ -192,7 +184,7 @@ def make_row_factory(field_types):
     """
     def row_factory(row):
         return dict((key, conv(row[i]) if row[i] is not None else None)
-                    for i, (key, conv) in enumerate(field_types))
+                    for i, (key, conv) in enumerate(fields))
     return row_factory
 
 
@@ -200,119 +192,36 @@ class TableManager(object):
     """Manage a set of tables for a Lightstreamer client. Use table_factory()
     when the first caller requests a table, and later destroy it when the last
     caller unsubscribes."""
-    def __init__(self, client):
+    def __init__(self, table_factory, ids_func=None):
         """Create an instance associated with the LsClient `client`."""
-        self.client = client
+        self.table_factory = table_factory
+        self.ids_func = ids_func or (lambda o: o)
         self.table_map = {}
         self.func_map = {}
 
-    def key_func(self, key):
-        """Map a key as necessary; default implementation simply returns the
-        original key."""
-        return key
+    def listen(self, func, item_ids=None):
+        """Subscribe `func` to updates for `item_ids``."""
+        item_ids = self.ids_func(item_ids)
+        if item_ids not in self.table_map:
+            self.table_map[item_ids] = self.table_factory(item_ids)
+            self.table_map[item_ids].on_update(
+                lambda item_id, row: self._on_update(item_ids, row))
+        self.func_map.setdefault(item_ids, set()).add(func)
 
-    def listen(self, func, key=None):
-        """Subscribe `func` to updates for `key``."""
-        key = self.key_func(key)
-        if key not in self.table_map:
-            self.table_map[key] = self.table_factory(key)
-            self.table_map[key].on_update(
-                lambda item_id, row: self._on_update(key, row))
-        self.func_map.setdefault(key, set()).add(func)
-
-    def unlisten(self, func, key=None):
-        """Unsubscribe `func` from updates for `key`, destroying the
+    def unlisten(self, func, item_ids=None):
+        """Unsubscribe `func` from updates for `item_ids`, destroying the
         Lightstreamer subscription if it was the last interested function."""
-        if key in self.table_map:
-            self.func_map[key].discard(func)
-            if not self.func_map[key]:
-                table = self.table_map.pop(key)
+        item_ids = self.ids_func(item_ids)
+        if item_ids in self.table_map:
+            self.func_map[item_ids].discard(func)
+            if not self.func_map[item_ids]:
+                table = self.table_map.pop(item_ids)
                 table.delete()
 
-    def _on_update(self, key, row):
+    def _on_update(self, item_ids, row):
         """Invoked when any table has changed; forward the changed row to
         subscribed functions."""
-        lightstreamer.dispatch(self.func_map[key], row)
-
-
-class AccountMarginTableManager(TableManager):
-    def key_func(self, key):
-        """"""
-
-    def table_factory(self, key):
-        return lightstreamer.Table(self.client,
-            data_adapter=DA_CLIENT_MARGIN,
-            item_ids='CLIENTACCOUNTMARGIN.ALL',
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(ACCOUNT_MARGIN_FIELD_TYPES),
-            row_factory=make_row_factory(ACCOUNT_MARGIN_FIELD_TYPES)
-        )
-
-
-class PriceTableManager(TableManager):
-    def table_factory(self, market_id):
-        return lightstreamer.Table(self.client,
-            data_adapter='PRICES',
-            item_ids='PRICE.%d' % market_id,
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(PRICE_FIELD_TYPES),
-            row_factory=make_row_factory(PRICE_FIELD_TYPES)
-        )
-
-
-class DefaultTableManager(TableManager):
-    def table_factory(self, operator_id):
-        return lightstreamer.Table(self.client,
-            data_adapter='PRICES',
-            item_ids='AC%s' % operator_id,
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(PRICE_FIELD_TYPES),
-            row_factory=make_row_factory(PRICE_FIELD_TYPES)
-        )
-
-
-class TradeMarginTableManager(TableManager):
-    def key_func(self, key):
-        """Map any provided key to None; there is only one channel.
-        """
-
-    def table_factory(self, key):
-        return lightstreamer.Table(self.client,
-            data_adapter='TRADEMARGIN',
-            item_ids='ALL',
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(TRADE_MARGIN_FIELD_TYPES),
-            row_factory=make_row_factory(TRADE_MARGIN_FIELD_TYPES)
-        )
-
-
-class OrderTableManager(TableManager):
-    def key_func(self, key):
-        """Many any provided key to None; there is only one channel."""
-
-    def table_factory(self, key):
-        return lightstreamer.Table(self.client,
-            data_adapter=DA_ORDERS,
-            item_ids='ORDERS',
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(ORDERS_FIELD_TYPES),
-            row_factory=make_row_factory(ORDERS_FIELD_TYPES)
-        )
-
-
-class QuoteTableManager(TableManager):
-    def key_func(self, key):
-        """Map any provided key to None; there is only one channel.
-        """
-
-    def table_factory(self, key):
-        return lightstreamer.Table(self.client,
-            data_adapter='QUOTE',
-            item_ids='ALL',
-            mode=lightstreamer.MODE_MERGE,
-            schema=schema_for_type(QUOTE_FIELD_TYPES),
-            row_factory=make_row_factory(QUOTE_FIELD_TYPES)
-        )
+        lightstreamer.dispatch(self.func_map[item_ids], row)
 
 
 class CiStreamingClient(object):
@@ -322,16 +231,6 @@ class CiStreamingClient(object):
         self.log = logging.getLogger('CiStreamingClient')
         self._client_map = {}
         self._stopped = False
-
-    def _get_client(self, adapter_set):
-        """Create an LsClient instance connected to the given `adapter_set."""
-        client = self._client_map.get(adapter_set)
-        if not client:
-            client = lightstreamer.LsClient(self.url, content_length=1<<20)
-            client.create_session(self.api.username, adapter_set=adapter_set,
-                password=self.api.session_id)
-            self._client_map[adapter_set] = client
-        return client
 
     def stop(self, join=True):
         """Shut down the streaming client. If `join` is True, don't return
@@ -343,31 +242,76 @@ class CiStreamingClient(object):
             for client in self._client_map.itervalues():
                 client.join()
 
+    def _get_client(self, adapter_set):
+        """Create an LsClient instance connected to the given `adapter_set."""
+        client = self._client_map.get(adapter_set)
+        if not client:
+            client = lightstreamer.LsClient(self.url, content_length=1<<20)
+            client.create_session(self.api.username, adapter_set=adapter_set,
+                password=self.api.session_id, keepalive_ms=1000)
+            self._client_map[adapter_set] = client
+        return client
+
+    def _make_table_factory(self, adapter_set, data_adapter, fields):
+        """Return a function that when passed an item_ids string, returns a
+        lightstreamer.Table instance for `client` subscribed to those IDs from
+        `data_adapter`, with a row factory coresponding to `fields`"""
+        client = self._get_client(adapter_set)
+        def table_factory(item_ids):
+            return lightstreamer.Table(
+                client,
+                data_adapter=data_adapter,
+                item_ids=item_ids,
+                mode=lightstreamer.MODE_MERGE,
+                schema=' '.join(p[0] for p in fields),
+                row_factory=make_row_factory(fields)
+            )
+        return table_factory
+
     @util.cached_property
     def account_margin(self):
-        return AccountMarginTableManager(self._get_client(AS_ACCOUNT))
+        factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
+            data_adapter='CLIENTACCOUNTMARGIN', fields=MARGIN_FIELDS)
+        return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def trade_margin(self):
-        return TradeMarginTableManager(self._get_client(AS_ACCOUNT))
+        factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
+            data_adapter='TRADEMARGIN', fields=TRADE_MARGIN_FIELDS)
+        return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def default(self):
         """Listen to the stream of default prices for the given operator ID.
         `func` receives a Price instance each time the price updates."""
-        return DefaultTableManager(self._get_client(AS_DEFAULT))
+        factory = self._make_table_factory(adapter_set=AS_DEFAULT,
+            data_adapter='PRICES', fields=PRICE_FIELDS)
+        return TableManager(factory, lambda operator_id: 'AC%d' % operator_id)
 
     @util.cached_property
     def orders(self):
         """Listen to order status for the active user account."""
-        return OrderTableManager(self._get_client(AS_ACCOUNT))
+        factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
+            data_adapter='ORDERS', fields=ORDER_FIELDS)
+        return TableManager(factory, ids_func=lambda key: 'ORDERS')
 
     @util.cached_property
     def prices(self):
         """Listen to prices for the given list of market IDs."""
-        return PriceTableManager(self._get_client(AS_STREAMING))
+        factory = self._make_table_factory(adapter_set=AS_STREAMING,
+            data_adapter='PRICES', fields=PRICE_FIELDS)
+        return TableManager(factory, ids_func=lambda key: 'PRICE.%d' % key)
 
     @util.cached_property
     def quotes(self):
         """Listen to quote updates for the user's account."""
-        return QuoteTableManager(self._get_client(AS_TRADING))
+        factory = self._make_table_factory(adapter_set=AS_TRADING,
+            data_adapter='QUOTE', fields=QUOTE_FIELDS)
+        return TableManager(factory, ids_func=lambda key: 'ALL')
+
+    @util.cached_property
+    def news(self):
+        """Listen to news headlines."""
+        factory = self._make_table_factory(adapter_set=AS_STREAMING,
+            data_adapter='NEWS', fields=NEWS_FIELDS)
+        return TableManager(factory)
