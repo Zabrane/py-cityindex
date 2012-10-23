@@ -113,7 +113,7 @@ class CiApiClient:
         req = self._request(path)
         return self._open_raise(req)
 
-    @property
+    @util.cached_property
     def client_account_id(self):
         if not self._client_account_id:
             dct = self._get('useraccount/UserAccount/ClientAndTradingAccount')
