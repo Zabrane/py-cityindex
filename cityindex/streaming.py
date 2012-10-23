@@ -331,14 +331,14 @@ class CiStreamingClient(object):
 
     @util.cached_property
     def account_margin(self):
-        """List to client account margin updates."""
+        """Listen to client account margin updates."""
         factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
             data_adapter='CLIENTACCOUNTMARGIN', fields=MARGIN_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def trade_margin(self):
-        """List to per-trade margin updates."""
+        """Listen to per-trade margin updates."""
         factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
             data_adapter='TRADEMARGIN', fields=TRADE_MARGIN_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ALL')
