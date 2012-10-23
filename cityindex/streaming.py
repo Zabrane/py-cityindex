@@ -331,48 +331,49 @@ class CiStreamingClient(object):
 
     @util.cached_property
     def account_margin(self):
+        """List to client account margin updates."""
         factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
             data_adapter='CLIENTACCOUNTMARGIN', fields=MARGIN_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def trade_margin(self):
+        """List to per-trade margin updates."""
         factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
             data_adapter='TRADEMARGIN', fields=TRADE_MARGIN_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def default(self):
-        """Listen to the stream of default prices for the given operator ID.
-        `func` receives a Price instance each time the price updates."""
+        """Listen to the stream of default prices for some operator ID."""
         factory = self._make_table_factory(adapter_set=AS_DEFAULT,
             data_adapter='PRICES', fields=PRICE_FIELDS)
         return TableManager(factory, lambda operator_id: 'AC%d' % operator_id)
 
     @util.cached_property
     def orders(self):
-        """Listen to order status for the active user account."""
+        """Listen to order status updates."""
         factory = self._make_table_factory(adapter_set=AS_ACCOUNT,
             data_adapter='ORDERS', fields=ORDER_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ORDERS')
 
     @util.cached_property
     def prices(self):
-        """Listen to prices for the given list of market IDs."""
+        """Listen to prices for some market ID."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
             data_adapter='PRICES', fields=PRICE_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'PRICE.%d' % key)
 
     @util.cached_property
     def quotes(self):
-        """Listen to quote updates for the user's account."""
+        """Listen to oversize order quote updates."""
         factory = self._make_table_factory(adapter_set=AS_TRADING,
             data_adapter='QUOTE', fields=QUOTE_FIELDS)
         return TableManager(factory, ids_func=lambda key: 'ALL')
 
     @util.cached_property
     def news(self):
-        """Listen to news headlines."""
+        """Listen to news headlines for some category."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
             data_adapter='NEWS', fields=NEWS_FIELDS)
         return TableManager(factory)
