@@ -60,15 +60,17 @@ class cached_property(object):
         self.__module__ = func.__module__
         self.__doc__ = doc or func.__doc__
         self.func = func
+        self.lock = threading.Lock()
 
     def __get__(self, obj, type=None):
         if obj is None:
             return self
 
-        value = obj.__dict__.get(self.__name__, self._default_value)
-        if value is self._default_value:
-            value = self.func(obj)
-            obj.__dict__[self.__name__] = value
+        with self.lock:
+            value = obj.__dict__.get(self.__name__, self._default_value)
+            if value is self._default_value:
+                value = self.func(obj)
+                obj.__dict__[self.__name__] = value
 
         return value
 
