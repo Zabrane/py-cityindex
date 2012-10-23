@@ -17,6 +17,7 @@
 from __future__ import absolute_import
 
 import logging
+import threading
 
 from cityindex import util
 import lightstreamer
@@ -256,27 +257,26 @@ class CiStreamingClient(object):
             list.
 
     Example:
+        api = CiClientApi('DM12345678', 'password')
+        streamer = CiStreamingApi(api)
 
-    api = CiClientApi('DM12345678', 'password')
-    streamer = CiStreamingApi(api)
+        def on_uk100_change(price):
+            print 'UK 100:', price['Price']
+        streamer.prices.listen(on_uk100_change, 99500)
 
-    def on_uk100_change(price):
-        print 'UK 100:', price['Price']
-    streamer.prices.listen(on_uk100_change, 99500)
+        def on_news(headline):
+            print 'UK NEWS:', news['Headline']
+        streamer.news.listen(on_news, 'UK')
 
-    def on_news(headline):
-        print 'UK NEWS:', news['Headline']
-    streamer.news.listen(on_news, 'UK')
+        # Get bored, so unsubscribe.
+        streamer.news.unlisten(on_news, 'UK')
 
-    # Get bored, so unsubscribe.
-    streamer.news.unlisten(on_news, 'UK')
+        def on_order_changed(order):
+            print 'ORDER:', order
+        streamer.orders.listen(on_order_changed)
 
-    def on_order_changed(order):
-        print 'ORDER:', order
-    streamer.orders.listen(on_order_changed)
-
-    # Do useful work, decide to shutdown.
-    streamer.stop()
+        # Do useful work, decide to shutdown.
+        streamer.stop()
     """
     def __init__(self, api, url=None, prod=True):
         """Create an instance using the API session from CiApiClient instance
@@ -285,6 +285,7 @@ class CiStreamingClient(object):
         self.url = url or (LIVE_STREAM_URL if prod else TEST_STREAM_URL)
         self.log = logging.getLogger('CiStreamingClient')
         self._client_map = {}
+        self._client_map_lock = threading.Lock()
         self._stopped = False
 
     def stop(self, join=True):
@@ -299,12 +300,14 @@ class CiStreamingClient(object):
 
     def _get_client(self, adapter_set):
         """Create an LsClient instance connected to the given `adapter_set."""
-        client = self._client_map.get(adapter_set)
-        if not client:
-            client = lightstreamer.LsClient(self.url, content_length=1<<20)
-            client.create_session(self.api.username, adapter_set=adapter_set,
-                password=self.api.session_id, keepalive_ms=1000)
-            self._client_map[adapter_set] = client
+        with self._client_map_lock:
+            client = self._client_map.get(adapter_set)
+            if not client:
+                client = lightstreamer.LsClient(self.url, content_length=1<<20)
+                client.create_session(self.api.username,
+                    adapter_set=adapter_set, password=self.api.session_id,
+                    keepalive_ms=1000)
+                self._client_map[adapter_set] = client
         return client
 
     def _make_table_factory(self, adapter_set, data_adapter, fields):
