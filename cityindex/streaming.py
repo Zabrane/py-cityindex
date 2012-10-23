@@ -89,7 +89,7 @@ PRICE_FIELDS = (
 
 
 # NewsDTO
-NEWS_fields = (
+NEWS_FIELDS = (
     ('StoryId', int),
     ('Headline', unicode),
     ('PublishDate', conv_dt)
@@ -157,14 +157,6 @@ TRADE_MARGIN_FIELDS = (
     ('PriceCalculatedAt', float),
     ('PriceTakenAt', float),
     ('Quantity', float)
-)
-
-
-# NewsDTO
-NEWS_FIELDS = (
-    ('StoryId', int),
-    ('Headline', unicode),
-    ('PublishDate', unicode)
 )
 
 
