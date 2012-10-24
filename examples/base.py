@@ -2,6 +2,7 @@
 import Queue
 import logging
 import optparse
+import shlex
 import os
 import sys
 import threading
@@ -78,7 +79,7 @@ def threaded_lookup(method, strs):
     return markets, unknown
 
 
-def main_wrapper(main):
+def parse_options():
     parser = optparse.OptionParser()
     parser.add_option('--username', help='CityIndex username')
     parser.add_option('--password', help='CityIndex password')
@@ -90,7 +91,17 @@ def main_wrapper(main):
     parser.add_option('--suffix',
         help='Append suffix to each symbol (e.g. .O=NASDAQ, .N=NYSE')
 
-    opts, args = parser.parse_args()
+    args = sys.argv[1:]
+    conf_path = os.path.expanduser('~/.py-cityindex.conf')
+    if os.path.exists(conf_path):
+        with file(conf_path) as fp:
+            args = shlex.split(fp.readline()) + args
+
+    return parser.parse_args(args)
+
+
+def main_wrapper(main):
+    opts, args = parse_options()
     if not ((opts.username and opts.password)\
             and (opts.cfd or opts.spread)):
         parser.print_help()

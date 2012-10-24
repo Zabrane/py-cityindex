@@ -6,7 +6,21 @@ import logging
 import urwid
 
 import cityindex
+import lightstreamer
 import base
+
+
+PALETTE = [
+    ('title', 'yellow', 'default', 'bold'),
+    ('uptick', 'white', 'dark green', 'bold'),
+    ('downtick', 'white', 'dark red', 'bold'),
+    ('debug', 'light blue', 'default', 'default'),
+    ('info', 'dark green', 'default', 'default'),
+    ('I say', 'light red,bold', 'default', 'bold'),
+    ('online', 'dark green', 'default', 'default'),
+    ('reconnecting', 'yellow', 'default', 'default'),
+    ('offline', 'dark red', 'default', 'default'),
+]
 
 
 class Table(object):
@@ -110,15 +124,6 @@ def main(opts, args, api, streamer):
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
 
-    palette = [
-        ('title', 'yellow', 'default', 'bold'),
-        ('uptick', 'white', 'dark green', 'bold'),
-        ('downtick', 'white', 'dark red', 'bold'),
-        ('debug', 'light blue', 'default', 'default'),
-        ('info', 'dark green', 'default', 'default'),
-        ('I say', 'light red,bold', 'default', 'bold'),
-    ]
-
     tailer = LogTailer()
 
     button = urwid.Button(u'Exit')
@@ -137,24 +142,42 @@ def main(opts, args, api, streamer):
     table = Table(lambda price: price['MarketId'])
     table.add_field('TickDate', lambda _, cur: cur and cur.strftime('%H:%M:%S'),
         width=8)
-    table.add_field('Name', (lambda last, cur: cur), width=20)
-    for field in 'Price', 'Bid', 'Offer', 'High', 'Low', 'Change':
+    table.add_field('Name', (lambda last, cur: cur), width=35)
+    for field in 'Price', 'SprdPct', 'Bid', 'Offer', 'High', 'Low', 'Change':
         table.add_field(field, (lambda _, cur: cur), width=9)
     table.end_fields()
 
-    pp = urwid.Pile([table._columns, urwid.Divider(), pile])
+    status = urwid.Text('', align='right')
+    pp = urwid.Pile([status, urwid.Divider(), table._columns, urwid.Divider(), pile])
     top = urwid.Filler(pp, valign='top')
-    loop = urwid.MainLoop(top, palette)
+    loop = urwid.MainLoop(top, PALETTE)
 
     waker = base.ThreadWaker()
     loop.watch_file(waker.fileno(), waker.callback)
 
+    def redraw_state(map):
+        bits = []
+        attrmap = {lightstreamer.STATE_CONNECTING: 'reconnecting',
+                   lightstreamer.STATE_CONNECTED: 'online',
+                   lightstreamer.STATE_DISCONNECTED: 'offline',
+                   lightstreamer.STATE_RECONNECTING: 'reconnecting'}
+
+        for short, name in ('TRADING', cityindex.AS_TRADING), \
+                           ('STREAMING', cityindex.AS_STREAMING), \
+                           ('ACCOUNT', cityindex.AS_ACCOUNT):
+            attr = attrmap.get(map.get(name))
+            bits.append((attr, short + '   '))
+        status.set_text(bits)
+
+    streamer.on_state(lambda map: waker.put(redraw_state, map))
+
     def on_price_update(price):
-        if not price['MarketId']:
-            return
-        ric, market = markets[price['MarketId']]
-        price['RIC'] = ric.upper()
-        waker.put(table.update, price)
+        if price['MarketId']:
+            ric, market = markets[price['MarketId']]
+            price['RIC'] = ric.upper()
+            price['SprdPct'] =\
+                abs(((price['Bid'] - price['Offer']) / price['Price']) * 100)
+            waker.put(table.update, price)
 
     markets, unknown = base.threaded_lookup(method, args)
     for market_id, (ric, market) in markets.iteritems():
