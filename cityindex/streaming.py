@@ -186,7 +186,8 @@ class TableManager(object):
     when the first caller requests a table, and later destroy it when the last
     caller unsubscribes."""
     def __init__(self, table_factory, ids_func=None):
-        """Create an instance associated with the LsClient `client`."""
+        """Create an instance that uses `table_factory` to construct tables,
+        and optionally using `ids_func` to map item_ids into a normal form."""
         self.table_factory = table_factory
         self.ids_func = ids_func or (lambda o: o)
         self.table_map = {}
@@ -290,6 +291,10 @@ class CiStreamingClient(object):
         self.log = logging.getLogger('CiStreamingClient')
         self._client_map = {}
         self._client_map_lock = threading.Lock()
+        self._state_map = dict.fromkeys(
+            (AS_ACCOUNT, AS_DEFAULT, AS_STREAMING, AS_TRADING),
+            lightstreamer.STATE_DISCONNECTED)
+        self._state_funcs = []
         self._stopped = False
 
     def stop(self, join=True):
@@ -302,15 +307,34 @@ class CiStreamingClient(object):
             for client in self._client_map.itervalues():
                 client.join()
 
+    def on_state(self, func):
+        """Subscribe `func` to be invoked as `func(dct)` every time a
+        Lightstreamer client changes state, where dct is a dictionary whose
+        keys are cityindex.streaming.AS_* constants and values are
+        lightstreamer.STATE_* constants."""
+        self._state_funcs.append(func)
+
+    def _create_session(self, client, adapter_set):
+        client.create_session(self.api.username, adapter_set=adapter_set,
+            password=self.api.session_id, keepalive_ms=1000)
+
+    def _on_client_state(self, client, adapter_set, state):
+        self._state_map[adapter_set] = state
+        lightstreamer.dispatch(self._state_funcs, self._state_map)
+        if state == lightstreamer.STATE_DISCONNECTED and not self._stopped:
+            # TODO: sleep
+            self.log('adapter %r lost connection; reconnecting', adapter_set)
+            self._create_session(client, adapter_set)
+
     def _get_client(self, adapter_set):
         """Create an LsClient instance connected to the given `adapter_set."""
         with self._client_map_lock:
             client = self._client_map.get(adapter_set)
             if not client:
                 client = lightstreamer.LsClient(self.url, content_length=1<<20)
-                client.create_session(self.api.username,
-                    adapter_set=adapter_set, password=self.api.session_id,
-                    keepalive_ms=1000)
+                client.on_state(lambda state: \
+                    self._on_client_state(client, adapter_set, state))
+                self._create_session(client, adapter_set)
                 self._client_map[adapter_set] = client
         return client
 
@@ -319,14 +343,17 @@ class CiStreamingClient(object):
         lightstreamer.Table instance for `client` subscribed to those IDs from
         `data_adapter`, with a row factory coresponding to `fields`"""
         client = self._get_client(adapter_set)
+        schema = ' '.join(p[0] for p in fields)
+        row_factory = make_row_factory(fields)
+
         def table_factory(item_ids):
             return lightstreamer.Table(
                 client,
                 data_adapter=data_adapter,
                 item_ids=item_ids,
                 mode=lightstreamer.MODE_MERGE,
-                schema=' '.join(p[0] for p in fields),
-                row_factory=make_row_factory(fields)
+                schema=schema,
+                row_factory=row_factory
             )
         return table_factory
 
@@ -377,4 +404,4 @@ class CiStreamingClient(object):
         """Listen to news headlines for some category."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
             data_adapter='NEWS', fields=NEWS_FIELDS)
-        return TableManager(factory)
+        return TableManager(factory, key_func=lambda key: 'HEADLINES.%s' % key)
