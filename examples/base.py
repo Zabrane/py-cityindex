@@ -46,7 +46,12 @@ class ThreadPool(object):
         self.queue.put((func, args, kwargs))
 
     def join(self):
+        import time
+        while not self.queue.empty():
+            time.sleep(1)
         self.queue.join()
+        # blocks SIGINT:
+        #self.queue.join()
 
     def _run_one(self):
         func, args, kwargs = self.queue.get()
@@ -61,14 +66,15 @@ class ThreadPool(object):
             self._run_one()
 
 
-def threaded_lookup(method, strs):
+def threaded_lookup(searcher, strs):
     markets = {}
     unknown = []
 
     def lookup(s):
-        matches = method(s)
+        matches = searcher(s)
         if matches:
-            markets[matches[0]['MarketId']] = s, matches[0]
+            for match in matches:
+                markets[match['MarketId']] = s, match
         else:
             unknown.append(s)
 
@@ -81,6 +87,14 @@ def threaded_lookup(method, strs):
 
 def parse_options():
     parser = optparse.OptionParser()
+    parser.add_option('--bars', type='int', default=1440,
+        help='Number of bars to dump')
+    parser.add_option('--span', type='int', default=1,
+        help='Span of a single bar')
+    parser.add_option('--bycode', action='store_true',
+        help='Search by code instead of name')
+    parser.add_option('--daily', action='store_true',
+        help='Select daily markets only')
     parser.add_option('--username', help='CityIndex username')
     parser.add_option('--password', help='CityIndex password')
     parser.add_option('--debug', action='store_true')
@@ -115,4 +129,14 @@ def main_wrapper(main):
 
     api = cityindex.CiApiClient(opts.username, opts.password)
     streamer = cityindex.CiStreamingClient(api)
-    main(opts, args, api, streamer)
+
+    method = api.list_spread_markets if opts.spread else api.list_cfd_markets
+    kwarg = 'code' if opts.bycode else 'name'
+    def searcher(s):
+        hits = method(**{kwarg: s})
+        if opts.daily:
+            ok = set('cfd dft'.split())
+            hits = filter(lambda m: ok & set(m['Name'].lower().split()), hits)
+        return hits
+
+    main(opts, args, api, streamer, searcher)

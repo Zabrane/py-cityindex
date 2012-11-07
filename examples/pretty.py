@@ -54,7 +54,7 @@ class Table(object):
         key = self.row_key(row)
         fields = []
         for field in self._fields:
-            fields.append(urwid.Text('', self._align_map[field]))
+            fields.append(urwid.Text('', self._align_map[field], wrap='clip'))
             self._field_pile_map[field].widget_list.append(fields[-1])
         self._row_fields_map[key] = fields
         self.update(row)
@@ -110,17 +110,12 @@ class LogTailer(object):
         logging.getLogger().handlers = [self.Handler(self.text)]
 
 
-def main(opts, args, api, streamer):
+def main(opts, args, api, streamer, searcher):
     if not args:
         print 'Need at least one symbol to lookup.'
         return
 
     api.login()
-    if opts.spread:
-        method = api.list_spread_markets
-    else:
-        method = api.list_cfd_markets
-
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
 
@@ -143,7 +138,7 @@ def main(opts, args, api, streamer):
     table.add_field('TickDate', lambda _, cur: cur and cur.strftime('%H:%M:%S'),
         width=8)
     table.add_field('Name', (lambda last, cur: cur), width=35)
-    for field in 'Price', 'SprdPct', 'Bid', 'Offer', 'High', 'Low', 'Change':
+    for field in 'Price', 'Spread', 'SprdPct', 'Bid', 'Offer', 'High', 'Low', 'Change':
         table.add_field(field, (lambda _, cur: cur), width=9)
     table.end_fields()
 
@@ -175,11 +170,11 @@ def main(opts, args, api, streamer):
         if price['MarketId']:
             ric, market = markets[price['MarketId']]
             price['RIC'] = ric.upper()
-            price['SprdPct'] =\
-                abs(((price['Bid'] - price['Offer']) / price['Price']) * 100)
+            price['Spread'] = price['Bid'] - price['Offer']
+            price['SprdPct'] = (price['Spread'] / price['Price']) * 100
             waker.put(table.update, price)
 
-    markets, unknown = base.threaded_lookup(method, args)
+    markets, unknown = base.threaded_lookup(searcher, args)
     for market_id, (ric, market) in markets.iteritems():
         table.append({'MarketId': market_id})
         streamer.prices.listen(on_price_update, market_id)

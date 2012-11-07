@@ -17,17 +17,12 @@ import cityindex
 import base
 
 
-def main(opts, args, api, streamer):
+def main(opts, args, api, streamer, searcher):
     if not args:
         print 'Need at least one symbol to lookup.'
         return
 
     api.login()
-
-    if opts.spread:
-        method = api.list_spread_markets
-    else:
-        method = api.list_cfd_markets
 
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
@@ -42,7 +37,7 @@ def main(opts, args, api, streamer):
     write('RIC', 'MarketId', 'Description')
 
     def lookup(ric):
-        matches = method(code=ric)
+        matches = searcher(ric)
         if matches:
             market = matches[0]
             write(ric.upper(), market['MarketId'], market['Name'])

@@ -11,17 +11,12 @@ import cityindex
 import base
 
 
-def main(opts, args, api, streamer):
+def main(opts, args, api, streamer, searcher):
     if not args:
         print 'Need at least one symbol to lookup.'
         return
 
     api.login()
-    if opts.spread:
-        method = api.list_spread_markets
-    else:
-        method = api.list_cfd_markets
-
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
 
@@ -33,22 +28,24 @@ def main(opts, args, api, streamer):
             writer.writerow(row)
 
     def dump(pr):
-        sprd = pr['Offer'] - pr['Bid']
+        if not pr['MarketId']:
+            return
+        sprd = (pr['Offer'] or 0) - (pr['Bid'] or 0)
         s, market = markets[pr['MarketId']]
         write(pr['TickDate'].strftime('%H:%M:%S.%f'),
-              s.upper(),
+              pr['MarketId'], pr['Name'],
               pr['Price'], sprd, pr['Bid'], pr['Offer'],
-              pr['High'], pr['Low'],
-              pr['Change'])
+              pr['High'], pr['Low'], pr['Change'])
 
-    markets, unknown = base.threaded_lookup(method, args)
+    markets, unknown = base.threaded_lookup(searcher, args)
     if unknown:
         print '# Unknown:', ', '.join(unknown)
 
     for market_id, (ric, market) in markets.iteritems():
         streamer.prices.listen(dump, market_id)
 
-    write('Date', 'RIC', 'Price', 'Spread', 'Bid', 'Offer', 'High', 'Low', 'Change')
+    write('Date', 'MarketId', 'Name', 'Price', 'Spread',
+          'Bid', 'Offer', 'High', 'Low', 'Change')
     raw_input()
     streamer.stop()
 
