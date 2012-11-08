@@ -38,20 +38,20 @@ Code Style
 
     Performance is another factor; manipulating large quantities of
     timezone-aware datetimes is horrifically slow, particularly with ``pytz``.
-    The datetime API is well suited for calendaring or on-screen display tasks,
-    but as an internal format where timezones are unimportant it kinda sucks.
+    ``datetime`` is well suited for calendaring or on-screen display tasks, but
+    as an internal format where timezones are unimportant it kinda sucks.
 
 **Why are prices floating point?**
-    See previous answer. Python's ``decimal.Decimal`` is a nice ideal, but
-    performance is horrendous, few know how to configure it correctly, it
-    suffers the same serializability issues as ``datetime``, and is generally
-    overkill for the task of representing prices. In particular it is
-    noteworthy that ``decimal`` remains a fixed precision type.
+    Python's ``decimal.Decimal`` is a nice ideal, but performance is
+    horrendous, few know how to configure it correctly, it suffers the same
+    serializability issues as ``datetime``, and is generally overkill for the
+    task of representing prices. In particular it is noteworthy that
+    ``decimal`` remains a fixed precision type.
 
     It is also commonplace for useful libraries to simply ignore ``decimal``
     altogether in preference of float: none of ``pandas``, ``TaLib`` or NumPy
-    offer direct support. This means that consuming a time series in those
-    libraries would require a conversion step.
+    offer direct support. This means consuming time series in those libraries
+    requires a conversion step.
 
     Using the ``PriceDecimalPlaces`` field of ``ApiMarketInformationDTO`` it
     should always be possible to recover a decimal price from its floating
