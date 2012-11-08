@@ -168,7 +168,8 @@ class CiApiClient:
         return self._get('market/searchwithtags', dct)['Markets']
 
     def market_info(self, market_id):
-        return self._get('market/%s/information' % market_id)
+        dct = self._get('market/%s/information' % market_id)
+        return dct['MarketInformation']
 
     def market_bars(self, market_id, interval='MINUTE', span=10, bars=75):
         out = self._get('market/%s/barhistory' % market_id, {
@@ -201,3 +202,8 @@ class CiApiClient:
             'ClientAccountId': self.client_account_id,
             'MaxResults': max_results
         })['Markets']
+
+    def get_system_lookup(self, entity):
+        return self._get('message/lookup', {
+            'LookupEntityName': entity
+        })
