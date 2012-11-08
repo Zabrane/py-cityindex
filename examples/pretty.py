@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import
 
+import datetime
 import logging
 import urwid
 
@@ -67,6 +68,9 @@ class Table(object):
         for idx, field in enumerate(self._fields):
             last = prev.get(field)
             cur = row.setdefault(field)
+            if last is None and cur is None:
+                fields[idx].set_text('')
+                return
             formatter = self._field_formatter_map[field]
             attrs = formatter(last, cur)
             if isinstance(attrs, (int, float)):
@@ -110,6 +114,11 @@ class LogTailer(object):
         logging.getLogger().handlers = [self.Handler(self.text)]
 
 
+def tsformat(ts):
+    dt = datetime.datetime.fromtimestamp(ts)
+    return dt.strftime('%H:%M:%S')
+
+
 def main(opts, args, api, streamer, searcher):
     if not args:
         print 'Need at least one symbol to lookup.'
@@ -135,8 +144,7 @@ def main(opts, args, api, streamer, searcher):
     urwid.connect_signal(button, 'click', on_exit_clicked)
 
     table = Table(lambda price: price['MarketId'])
-    table.add_field('TickDate', lambda _, cur: cur and cur.strftime('%H:%M:%S'),
-        width=8)
+    table.add_field('TickDate', (lambda _, cur: tsformat(cur)), width=8)
     table.add_field('Name', (lambda last, cur: cur), width=35)
     for field in 'Price', 'Spread', 'SprdPct', 'Bid', 'Offer', 'High', 'Low', 'Change':
         table.add_field(field, (lambda _, cur: cur), width=9)

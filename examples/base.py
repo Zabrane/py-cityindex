@@ -93,6 +93,8 @@ def parse_options():
         help='Span of a single bar')
     parser.add_option('--bycode', action='store_true',
         help='Search by code instead of name')
+    parser.add_option('--spread', action='store_true',
+        default=False, help='Match spreads')
     parser.add_option('--daily', action='store_true',
         help='Select daily markets only')
     parser.add_option('--username', help='CityIndex username')
@@ -100,7 +102,7 @@ def parse_options():
     parser.add_option('--debug', action='store_true')
     parser.add_option('--cfd', action='store_true',
                       help='Search for CFD markets.')
-    parser.add_option('--spread', action='store_true',
+    parser.add_option('--bet', action='store_true',
                       help='Search for spread bet markets.')
     parser.add_option('--suffix',
         help='Append suffix to each symbol (e.g. .O=NASDAQ, .N=NYSE')
@@ -117,10 +119,9 @@ def parse_options():
 def main_wrapper(main):
     opts, args = parse_options()
     if not ((opts.username and opts.password)\
-            and (opts.cfd or opts.spread)):
-        parser.print_help()
+            and (opts.cfd or opts.bet)):
         print
-        print 'Need username, password, and --cfd or --spread'
+        print 'Need username, password, and --cfd or --bet'
         sys.exit(1)
 
     level = logging.DEBUG if opts.debug else logging.INFO
@@ -130,13 +131,15 @@ def main_wrapper(main):
     api = cityindex.CiApiClient(opts.username, opts.password)
     streamer = cityindex.CiStreamingClient(api)
 
-    method = api.list_spread_markets if opts.spread else api.list_cfd_markets
+    method = api.list_spread_markets if opts.bet else api.list_cfd_markets
     kwarg = 'code' if opts.bycode else 'name'
     def searcher(s):
         hits = method(**{kwarg: s})
         if opts.daily:
             ok = set('cfd dft'.split())
             hits = filter(lambda m: ok & set(m['Name'].lower().split()), hits)
+        if not opts.spread:
+            hits = filter(lambda m: 'spread' not in m['Name'].lower().split(), hits)
         return hits
 
     main(opts, args, api, streamer, searcher)

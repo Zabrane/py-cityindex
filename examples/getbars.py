@@ -21,7 +21,7 @@ import base
 
 def filename_for(market):
     subbed = re.sub('[ ()]+', '_', market['Name'])
-    pfx = 'cfd' if 'CFD' in market['Name'] else 'sb'
+    pfx = 'cfd' if 'CFD' in market['Name'] else 'bet'
     return 'CityIndex_%s_%s_%d.csv' % (pfx, subbed, market['MarketId'])
 
 
