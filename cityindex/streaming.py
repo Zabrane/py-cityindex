@@ -52,8 +52,7 @@ def conv_bool(s):
 
 
 def conv_dt(s):
-    from datetime import datetime
-    return datetime.utcfromtimestamp(float(util.json_fixup('"%s"' % s)))
+    return float(util.json_fixup('"%s"' % s))
 
 
 # ClientAccountMarginDTO
@@ -99,11 +98,12 @@ NEWS_FIELDS = (
 
 # OrderDTO
 ORDER_FIELDS = (
-    ('OrderID', int),
-    ('MarketID', int),
-    ('ClientAccountID', int),
-    ('TradingAccountID', int),
-    ('CurrencyID', int),
+    ('OrderId', int),
+    ('Name', unicode),
+    ('MarketId', int),
+    ('ClientAccountId', int),
+    ('TradingAccountId', int),
+    ('CurrencyId', int),
     ('CurrencyISO', unicode),
     ('Direction', int),
     ('AutoRollover', conv_bool),
@@ -338,7 +338,8 @@ class CiStreamingClient(object):
                 self._client_map[adapter_set] = client
         return client
 
-    def _make_table_factory(self, adapter_set, data_adapter, fields):
+    def _make_table_factory(self, adapter_set, data_adapter, fields,
+            snapshot=False):
         """Return a function that when passed an item_ids string, returns a
         lightstreamer.Table instance for `client` subscribed to those IDs from
         `data_adapter`, with a row factory coresponding to `fields`"""
@@ -353,6 +354,7 @@ class CiStreamingClient(object):
                 item_ids=item_ids,
                 mode=lightstreamer.MODE_MERGE,
                 schema=schema,
+                snapshot=snapshot,
                 row_factory=row_factory
             )
         return table_factory
@@ -375,7 +377,7 @@ class CiStreamingClient(object):
     def default(self):
         """Listen to the stream of default prices for some operator ID."""
         factory = self._make_table_factory(adapter_set=AS_DEFAULT,
-            data_adapter='PRICES', fields=PRICE_FIELDS)
+            data_adapter='PRICES', fields=PRICE_FIELDS, snapshot=True)
         return TableManager(factory, lambda operator_id: 'AC%d' % operator_id)
 
     @util.cached_property
@@ -389,7 +391,7 @@ class CiStreamingClient(object):
     def prices(self):
         """Listen to prices for some market ID."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
-            data_adapter='PRICES', fields=PRICE_FIELDS)
+            data_adapter='PRICES', fields=PRICE_FIELDS, snapshot=True)
         return TableManager(factory, ids_func=lambda key: 'PRICE.%d' % key)
 
     @util.cached_property
@@ -404,4 +406,4 @@ class CiStreamingClient(object):
         """Listen to news headlines for some category."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
             data_adapter='NEWS', fields=NEWS_FIELDS)
-        return TableManager(factory, key_func=lambda key: 'HEADLINES.%s' % key)
+        return TableManager(factory, ids_func=lambda key: 'HEADLINES.%s' % key)
