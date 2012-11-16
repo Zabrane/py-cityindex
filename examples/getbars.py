@@ -62,6 +62,7 @@ def main(opts, args, api, streamer, searcher):
 
     def fetch(market):
         bars = api.market_bars(market['MarketId'],
+            interval=opts.interval.upper(),
             span=opts.span, bars=opts.bars)['PriceBars']
 
         if opts.raw:
