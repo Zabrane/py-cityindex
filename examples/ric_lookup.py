@@ -34,20 +34,12 @@ def main(opts, args, api, streamer, searcher):
         with lock:
             writer.writerow(row)
 
+    markets, unknown = base.threaded_lookup(searcher, args)
     write('RIC', 'MarketId', 'Description')
-
-    def lookup(ric):
-        matches = searcher(ric)
-        if matches:
-            market = matches[0]
-            write(ric.upper(), market['MarketId'], market['Name'])
-        else:
-            write(ric.upper(), '-', '-')
-
-    tp = base.ThreadPool()
-    for ric in args:
-        tp.put(lookup, ric)
-    tp.join()
+    for unk in unknown:
+        write(ric.upper(), '-', '-')
+    for ric, market in markets.itervalues():
+        write(ric.upper(), market['MarketId'], market['Name'])
 
 if __name__ == '__main__':
     base.main_wrapper(main)
