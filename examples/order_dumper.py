@@ -26,17 +26,25 @@ def on_order_update(order):
     market = get_market(order['MarketId'])
     order['Market'] = market['Name']
     order['Dir'] = 'BUY' if order['Direction'] else 'SELL'
-    print ('%(CurrencyISO)s %(Type)s %(Dir)s ORDER %(OrderId)d: '
-           '%(Market)r: %(Status)s') % order
+    #print ('%(CurrencyISO)s %(Type)s %(Dir)s ORDER %(OrderId)d: '
+           #'%(Market)r: %(Status)s') % order
+    print 'ORDER STATUS',
+    from pprint import pprint
+    pprint(order)
 
 
 def on_account_margin(margin):
-    print 'ACCOUNT MARGIN', margin
+    print 'ACCOUNT MARGIN',
+    from pprint import pprint
+    pprint(margin)
     print
 
 
 def on_trade_margin(margin):
-    print 'TRADE MARGIN', margin
+    print 'TRADE MARGIN',
+    from pprint import pprint
+    pprint(margin)
+    print
 
 
 def main(opts, args, api, streamer, searcher):
