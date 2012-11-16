@@ -14,10 +14,11 @@ import cityindex
 import base
 
 
-def filename_for(market):
+def filename_for(opts, market):
     subbed = re.sub('[ ()]+', '_', market['Name'])
     pfx = 'cfd' if 'CFD' in market['Name'] else 'bet'
-    return 'CityIndex_%s_%s_%d.csv' % (pfx, subbed, market['MarketId'])
+    spn = '%s%s' % (opts.span, opts.interval[0].upper())
+    return 'CityIndex_%s_%s_%s_%d.csv' % (pfx, spn, subbed, market['MarketId'])
 
 
 def tsformat(bar):
@@ -74,7 +75,7 @@ def main(opts, args, api, streamer, searcher):
             if opts.chop:
                 bars = bars[-opts.bars:]
 
-        filename = filename_for(market)
+        filename = filename_for(opts, market)
         with file(filename, 'w') as fp:
             writer = csv.writer(fp, quoting=csv.QUOTE_ALL)
             write = writer.writerow
