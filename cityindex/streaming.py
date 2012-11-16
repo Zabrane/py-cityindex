@@ -194,31 +194,42 @@ class TableManager(object):
         self.func_map = {}
         self._lock = threading.Lock()
 
+    def _make_ids(self, ids):
+        if not isinstance(ids, (list, tuple)):
+            ids = [ids]
+        return ' '.join(self.ids_func(id_) for id_ in ids)
+
     def listen(self, func, item_ids=None):
         """Subscribe `func` to updates for `item_ids``."""
-        item_ids = self.ids_func(item_ids)
+        item_ids = self._make_ids(item_ids)
         with self._lock:
             if item_ids not in self.table_map:
                 self.table_map[item_ids] = self.table_factory(item_ids)
                 self.table_map[item_ids].on_update(
                     lambda item_id, row: self._on_update(item_ids, row))
-        self.func_map.setdefault(item_ids, set()).add(func)
+            self.func_map.setdefault(item_ids, set()).add(func)
 
     def unlisten(self, func, item_ids=None):
         """Unsubscribe `func` from updates for `item_ids`, destroying the
         Lightstreamer subscription if it was the last interested function."""
-        item_ids = self.ids_func(item_ids)
-        if item_ids in self.table_map:
-            self.func_map[item_ids].discard(func)
-            with self._lock:
-                if not self.func_map[item_ids]:
-                    table = self.table_map.pop(item_ids)
-                    table.delete()
+        item_ids = self._make_ids(item_ids)
+        with self._lock:
+            if item_ids in self.table_map:
+                self.func_map[item_ids].discard(func)
+                self._maybe_delete(item_ids)
+
+    def _maybe_delete(self, item_ids):
+        if not self.func_map[item_ids]:
+            table = self.table_map.pop(item_ids)
+            table.delete()
+            self.func_map.pop(item_ids)
 
     def _on_update(self, item_ids, row):
         """Invoked when any table has changed; forward the changed row to
         subscribed functions."""
         lightstreamer.dispatch(self.func_map[item_ids], row)
+        with self._lock:
+            self._maybe_delete(item_ids)
 
 
 class CiStreamingClient(object):
@@ -392,7 +403,7 @@ class CiStreamingClient(object):
         """Listen to prices for some market ID."""
         factory = self._make_table_factory(adapter_set=AS_STREAMING,
             data_adapter='PRICES', fields=PRICE_FIELDS, snapshot=True)
-        return TableManager(factory, ids_func=lambda key: 'PRICE.%d' % key)
+        return TableManager(factory, ids_func=lambda key: 'PRICE.%s' % key)
 
     @util.cached_property
     def quotes(self):

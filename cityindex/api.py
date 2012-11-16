@@ -18,6 +18,7 @@ from __future__ import absolute_import
 
 import json
 import logging
+import socket
 import urllib
 import urllib2
 import urlparse
@@ -26,8 +27,8 @@ from cityindex import util
 
 
 # Production.
-LIVE_API_URL = 'https://ciapi.cityindex.com/tradingapi/'
-TEST_API_URL = 'https://ciapipreprod.cityindextest9.co.uk/tradingapi/'
+LIVE_API_URL = 'http://ciapi.cityindex.com/tradingapi/'
+TEST_API_URL = 'http://ciapipreprod.cityindextest9.co.uk/tradingapi/'
 REQS_PER_SEC = 10
 
 
@@ -77,10 +78,20 @@ class CiApiClient:
         self._client_account_id = None
         # Docs say no more than 50reqs/5sec.
         self._bucket = util.LeakyBucket(REQS_PER_SEC, REQS_PER_SEC)
+        self._resolve_host()
+
+    def _resolve_host(self):
+        parsed = list(urlparse.urlparse(self.url))
+        self._original_host = parsed[1]
+        parsed[1] = socket.gethostbyname(parsed[1])
+        self.log.debug('Resolved %r to %r', self._original_host, parsed[1])
+        self.url = urlparse.urlunparse(tuple(parsed))
 
     def _request(self, path):
         self._bucket.get()
-        req = urllib2.Request(urlparse.urljoin(self.url, path))
+        req = urllib2.Request(urlparse.urljoin(self.url, path), headers={
+            'Host': self._original_host
+        })
         if self.session_id:
             req.add_header('UserName', self.username)
             req.add_header('session', self.session_id)
@@ -114,11 +125,16 @@ class CiApiClient:
         return self._open_raise(req)
 
     @util.cached_property
+    def account_information(self):
+        return self._get('useraccount/UserAccount/ClientAndTradingAccount')
+
+    @property
     def client_account_id(self):
-        if not self._client_account_id:
-            dct = self._get('useraccount/UserAccount/ClientAndTradingAccount')
-            self._client_account_id = dct['ClientAccountId']
-        return self._client_account_id
+        return self.account_information['ClientAccountId']
+
+    @property
+    def trading_accounts(self):
+        return self.account_information['TradingAccounts']
 
     def login(self):
         dct = self._post('session', {
@@ -171,21 +187,45 @@ class CiApiClient:
         dct = self._get('market/%s/information' % market_id)
         return dct['MarketInformation']
 
-    def market_bars(self, market_id, interval='MINUTE', span=10, bars=75):
-        out = self._get('market/%s/barhistory' % market_id, {
+    def market_search(self, query, by_code=False, by_name=False, spread=False,
+            cfd=False, binary=False, options=False, max_results=200,
+            mobile=False):
+        dct = self._get('market/informationsearch', {
+            'searchByMarketCode': url_bool(by_code),
+            'searchByMarketName': url_bool(by_name),
+            'spreadProductType': url_bool(spread),
+            'cfdProductType': url_bool(cfd),
+            'binaryProductType': url_bool(binary),
+            'IncludeOptions': url_bool(options),
+            'query': query,
+            'maxResults': max_results,
+            'useMobileShortName': url_bool(mobile)
+        })
+        return dct['MarketInformation']
+
+    def market_bars(self, market_id, interval='MINUTE', span=1, bars=60):
+        return self._get('market/%s/barhistory' % market_id, {
             'interval': interval,
             'span': span,
             'PriceBars': bars
         })
-        return out
 
-    def headlines(self):
-        return self._get('news/headlines')
-
-    def headlines_with_source(self, source, category, max_results=50):
-        return self._get('news/%s/%s' % (source, category), {
-            'MaxResults': max_results
+    def market_ticks(self, market_id, ticks=1000):
+        return self._get('market/%s/tickhistory' % market_id, {
+            'PriceTicks': ticks
         })
+
+    def headlines(self, source=None, category=None, max_results=50,
+            culture_id=None):
+        return self._post('news/headlines', {
+            'Source': source or '',
+            'Category': category or 'uk',
+            'MaxResults': max_results,
+            'CultureId': culture_id
+        })
+
+    def news_detail(self, source, story_id):
+        return self._get('news/%s/%s' % (source, story_id))
 
     def list_cfd_markets(self, name=None, code=None, max_results=200):
         return self._get('cfd/markets', {
@@ -206,4 +246,10 @@ class CiApiClient:
     def get_system_lookup(self, entity):
         return self._get('message/lookup', {
             'LookupEntityName': entity
+        })
+
+    def list_trade_history(self, account_id, max_results=200):
+        return self._get('order/tradehistory', {
+            'TradingAccountId': account_id,
+            'maxResults': max_results
         })
