@@ -1,0 +1,71 @@
+<!doctype html>
+
+<style>
+    td, th {
+        text-align: left;
+    }
+</style>
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script src="/static/dygraph-combined.js"></script>
+<script src="/static/Base.js"></script>
+
+<form>
+
+<table>
+
+<tr>
+<th><label for=s>Market:</label>
+<td><input id=s name="s">
+<td>
+    {% for kind in mods %}
+    <input type=checkbox {% if getattr(opts, kind) %}checked{% endif %}
+        name={{ kind }} id={{ kind }} value=1>
+    <label for={{ kind }}>{{ kind.title() }}</label> &nbsp;
+    {% endfor %}
+</tr>
+
+<tr>
+<th><label for=bars>Bars:</labe>
+<td><input id=bars name=bars value="1440">
+
+<td>
+    {% for interval in intervals %}
+    <input type=radio name="interval" value="{{ interval }}" id={{ interval }}
+        value=1 {% if getattr(opts, 'interval') == interval %}checked{% endif %}>
+    <label for={{ interval }}>{{ interval.title() + 's' }}</label> &nbsp;
+    {% endfor %}
+
+<tr>
+<th><label for=span>Span:</label>
+<td><input id=span name=span value="1">
+<td>(periods per bar)
+</tr>
+
+</table>
+
+<p>
+<input type=submit>
+</form>
+
+<p>
+&nbsp;
+</p>
+
+<div id="name"></div>
+
+<p>
+&nbsp;
+</p>
+
+<div id=graph style="width: 100%;"></div>
+<div id="graph2" style="width: 100%;"></div>
+
+<p>
+&nbsp;</p>
+
+<pre id=time></pre>
+<pre id=price></pre>
+<pre id=market></pre>
+
+<script src="/static/grapher.js"></script>
