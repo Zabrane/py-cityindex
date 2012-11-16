@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 
-"""Given a list of RICs on the command line, find the corresponding CityIndex
-market ID and print it to stdout.
-
-PYTHONPATH=. examples/ric_lookup.py --username=.. --password=.. --cfd --suffix=.L  $(< examples/ftse.syms ) 
-"""
 
 from __future__ import absolute_import
 
@@ -30,6 +25,32 @@ def tsformat(bar):
     return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 
+
+def pad_bars(bars, interval):
+    if not bars:
+        return
+
+    out = []
+    last = None
+    for bar in bars:
+        if last is not None:
+            while bar['BarDate'] > (last + interval):
+                price = out[-1]['Close']
+                padded = {
+                    'BarDate': out[-1]['BarDate'] + interval,
+                    'Open': price,
+                    'High': price,
+                    'Low': price,
+                    'Close': price
+                }
+                out.append(padded)
+                last = padded['BarDate']
+        out.append(bar)
+        last = bar['BarDate']
+    return out
+
+
+
 def main(opts, args, api, streamer, searcher):
     if not args:
         print 'Need at least one symbol to lookup.'
@@ -43,6 +64,15 @@ def main(opts, args, api, streamer, searcher):
         bars = api.market_bars(market['MarketId'],
             span=opts.span, bars=opts.bars)['PriceBars']
 
+        if opts.raw:
+            pad_count = 0
+        else:
+            orig = len(bars)
+            bars = pad_bars(bars, interval=opts.span * 60)
+            pad_count = len(bars) - orig
+            if opts.chop:
+                bars = bars[-opts.bars:]
+
         filename = filename_for(market)
         with file(filename, 'w') as fp:
             writer = csv.writer(fp, quoting=csv.QUOTE_ALL)
@@ -53,9 +83,10 @@ def main(opts, args, api, streamer, searcher):
                       bar['Open'], bar['High'], bar['Low'],
                       bar['Close']))
 
-        print 'Wrote %d bars for %d/%s to %r (first:%r, last:%r)' %\
+        print 'Wrote %d bars for %d/%s to %r (padded:%d, first:%r, last:%r)' %\
             (len(bars), market['MarketId'], market['Name'], filename,
-             bars and tsformat(bars[0]), bars and tsformat(bars[-1]))
+             pad_count, bars and tsformat(bars[0]),
+                        bars and tsformat(bars[-1]))
 
     markets, unknown = base.threaded_lookup(searcher, args)
     for unk in unknown:

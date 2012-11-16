@@ -4,6 +4,7 @@ import logging
 import optparse
 import shlex
 import os
+import re
 import sys
 import threading
 
@@ -87,21 +88,29 @@ def threaded_lookup(searcher, strs):
 
 def parse_options():
     parser = optparse.OptionParser()
+    parser.add_option('--raw', action='store_true', default=False,
+        help='Don\'t pad missing bars, return only what API returns.')
     parser.add_option('--bars', type='int', default=1440,
         help='Number of bars to dump')
+    parser.add_option('--interval', choices=('minute', 'hour', 'day'),
+        default='minute', help='Bar interval')
+    parser.add_option('--chop', action='store_true', default=False,
+        help='Prune padded bars to match requested bar count.')
     parser.add_option('--span', type='int', default=1,
         help='Span of a single bar')
     parser.add_option('--bycode', action='store_true',
         help='Search by code instead of name')
-    parser.add_option('--spread', action='store_true',
-        default=False, help='Match spreads')
+    parser.add_option('--options', action='store_true',
+        default=False, help='Match options')
     parser.add_option('--daily', action='store_true',
         help='Select daily markets only')
     parser.add_option('--username', help='CityIndex username')
     parser.add_option('--password', help='CityIndex password')
     parser.add_option('--debug', action='store_true')
-    parser.add_option('--cfd', action='store_true',
-                      help='Search for CFD markets.')
+    parser.add_option('--cfd', action='store_const',
+                      const='cfd', help='Search for CFD markets.')
+    parser.add_option('--binary', action='store_true',
+                      help='Search for binary option markets.')
     parser.add_option('--bet', action='store_true',
                       help='Search for spread bet markets.')
     parser.add_option('--suffix',
@@ -134,12 +143,21 @@ def main_wrapper(main):
     method = api.list_spread_markets if opts.bet else api.list_cfd_markets
     kwarg = 'code' if opts.bycode else 'name'
     def searcher(s):
-        hits = method(**{kwarg: s})
+        hits = api.market_search(s,
+            by_code=opts.bycode,
+            by_name=not opts.bycode,
+            spread=opts.bet,
+            cfd=opts.cfd,
+            binary=opts.binary,
+            options=opts.options)
+
+        prefix = s.split()[0].lower()
+        hits = filter(lambda m: m['Name'].lower().startswith(prefix), hits)
+
         if opts.daily:
-            ok = set('cfd dft'.split())
-            hits = filter(lambda m: ok & set(m['Name'].lower().split()), hits)
-        if not opts.spread:
-            hits = filter(lambda m: 'spread' not in m['Name'].lower().split(), hits)
+            quarter_re = re.compile(' (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|'
+                                      'Oct|Nov|Dec) [0-9]+ | Spread')
+            hits = filter(lambda m: not quarter_re.search(m['Name']), hits)
         return hits
 
     main(opts, args, api, streamer, searcher)
