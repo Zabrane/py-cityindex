@@ -5,6 +5,7 @@ import json
 import operator
 import time
 
+import numpy
 import flask
 import werkzeug.serving
 
@@ -18,6 +19,14 @@ STREAMER = None
 MCACHE = {}
 BCACHE = {}
 WINDOW = 60 * 60
+
+MODIFIERS = sorted('cfd binary bet daily options'.split())
+INTERVALS = 'MINUTE HOUR DAY'.split()
+INTERVAL_MAP = {
+    'MINUTE': 60,
+    'HOUR': 60 * 60,
+    'DAY': 86400
+}
 
 app = flask.Flask(__name__)
 
@@ -96,9 +105,6 @@ def jsonify(o):
         mimetype='application/json')
 
 
-MODIFIERS = sorted('cfd binary bet daily options'.split())
-INTERVALS = 'MINUTE HOUR DAY'.split()
-
 @app.route('/')
 def on_index():
     return flask.render_template('index.tmpl', opts=OPTS, mods=MODIFIERS,
@@ -108,7 +114,6 @@ def on_index():
 @app.route('/channel')
 def on_channel():
     return Channel().make_response()
-
 
 MAP = {
     'price': PriceSubscription,
@@ -139,13 +144,10 @@ def unsubscribe():
 
 @app.route('/markets')
 def on_markets():
-    old = operator.attrgetter(*(['interval'] + MODIFIERS))(OPTS)
+    old = operator.attrgetter(*MODIFIERS)(OPTS)
     for k in MODIFIERS:
         setattr(OPTS, k, flask.request.args.get(k) == '1')
-    for k in INTERVALS:
-        if flask.request.args.get(k) == '1':
-            opts.interval = k
-    if old != operator.attrgetter(*(['interval'] + MODIFIERS))(OPTS):
+    if old != operator.attrgetter(*MODIFIERS)(OPTS):
         MCACHE.clear()
     s = flask.request.args['s']
     t, o = MCACHE.get(s, (0, 0))
@@ -156,22 +158,19 @@ def on_markets():
 
 
 def make_bin(bars):
-    import array
-    ar = array.array('d', xrange(5 * len(bars)))
-    for idx, bar in enumerate(bars):
-        base = 5 * idx
-        ar[base] = bar['BarDate']
-        ar[base + 1] = bar['Open']
-        ar[base + 2] = bar['High']
-        ar[base + 3] = bar['Low']
-        ar[base + 4] = bar['Close']
-    return ar.tostring()
+    ar = numpy.empty(5 * len(bars))
+    base_open = len(bars)
+    base_high = len(bars) * 2
+    base_low = len(bars) * 3
+    base_close = len(bars) * 4
 
-INTERVAL_MAP = {
-    'MINUTE': 60,
-    'HOUR': 60 * 60,
-    'DAY': 86400
-}
+    for idx, bar in enumerate(bars):
+        ar[idx] = bar['BarDate']
+        ar[base_open + idx] = bar['Open']
+        ar[base_high + idx] = bar['High']
+        ar[base_low + idx] = bar['Low']
+        ar[base_close + idx] = bar['Close']
+    return ar.tostring()
 
 
 @app.route('/bars')

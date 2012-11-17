@@ -7,29 +7,32 @@ var MyChart = Base.extend({
     constructor: function(parent, width, height)
     {
         this.parent = parent;
-        this._initCanvas();
+        this._initCanvas(width, height);
     },
 
-    _initCanvas: function()
+    _initCanvas: function(width, height)
     {
         this.canvas = $(document.createElement('canvas'));
-        this.ctx = this.canvas[0].getContext('2d');
+        this.canvas.appendTo(this.parent);
+
         this.canvas.css({
             width: width || '100%',
             height: height || '250px'
         });
+        this.width = this.canvas.width();
+        this.height = this.canvas.height();
 
-        this.canvas.appendTo(this.parent);
-        this.canvas.attr('width', this.canvas.width());
-        this.canvas.attr('height', this.canvas.height());
-        this.canvas.css({
-            'image-rendering': 'pixelated !important'
-        });
-        var height = this.canvas.height();
-        var width = this.canvas.width();
+        this.canvas.attr('width', this.width);
+        this.canvas.attr('height', this.height);
 
+        this.ctx = this.canvas[0].getContext('2d');
         // Hack to de-blur lines.
         this.ctx.translate(0.5, 0.5);
+    },
+
+    clear: function()
+    {
+        this.ctx.clearRect(0, 0, this.width, this.height);
     },
 
     remove: function()
@@ -56,36 +59,36 @@ var MyChart = Base.extend({
 
     setBars: function(bars, getXValue, getYValue)
     {
-        var yRange = this.getBarRange(bars);
-        var pad = (yRange.high - yRange.low) * 0.1;
-        var yHigh = yRange.high + pad;
-        var yLow = yRange.low - pad;
+        var yHigh = -Infinity;
+        var yLow = Infinity;
 
-        var xLow = bars[0].BarDate;
-        var xHigh = bars[bars.length - 1].BarDate;
+        for(var i = 0; i < bars.length; i++) {
+            yHigh = Math.max(yHigh, getYValue(bars, i));
+            yLow = Math.min(yLow, getYValue(bars, i));
+        }
+
+        var pad = (yHigh - yLow) * 0.1;
+        yHigh += pad;
+        yLow -= pad;
+
+        var xLow = getXValue(bars, 0);
+        var xHigh = getXValue(bars, bars.length - 1);
         var pad = (xHigh - xLow) * 0.01;
         xHigh += pad;
         xLow -= pad;
 
-        this.canvas.attr('width', this.canvas.width());
-        this.canvas.attr('height', this.canvas.height());
-        var height = this.canvas.height();
-        var width = this.canvas.width();
-
         var left = 50;
 
-        var xPerPt = (width - left) / (xHigh - xLow);
-        var yPerPt = height / (yHigh - yLow);
-        this.ctx.mozImageSmoothingEnabled = false;
-        this.ctx.translate(0.5, 0.5);
+        var xPerPt = (this.width - left) / (xHigh - xLow);
+        var yPerPt = this.height / (yHigh - yLow);
 
         var ctx = this.ctx;
         ctx.moveTo(left + ((getXValue(bars, 0) - xLow) * xPerPt),
-          height - (getYValue(bars, 0) - yLow) * yPerPt);
+          this.height - (getYValue(bars, 0) - yLow) * yPerPt);
 
         for(var i = 1; i < bars.length; i++) {
             ctx.lineTo(left + ((getXValue(bars, i) - xLow) * xPerPt),
-              height - (getYValue(bars, i) - yLow) * yPerPt);
+              this.height - (getYValue(bars, i) - yLow) * yPerPt);
         }
         ctx.stroke();
     },
@@ -103,9 +106,8 @@ var MyChart = Base.extend({
         xHigh += pad;
         xLow -= pad;
 
-        var width = this.canvas.width();
-        var height = this.canvas.height();
-        this.ctx.clearRect(0, 0, width, height);
+        var width = this.width;
+        var height = this.height;
 
         var left = 50;
         var yPerPt = height / (yHigh - yLow);
@@ -191,6 +193,27 @@ function getYValue(series, i) {
     return series[i].Close;
 }
 
+
+function sma(data, n, getYValue) {
+    var sma = [];
+    sma.length = data.length;
+
+    var tot = 0;
+    for(var i = 0; i < n; i++) {
+        var val = getYValue(data, i);
+        sma[i] = val;
+        tot += val;
+    }
+
+    for(; i < data.length; i++) {
+        sma[i] = tot / n;
+        tot -= getYValue(data, i-n);
+        tot += getYValue(data, i);
+    }
+
+    return sma;
+}
+
 function drawGraph(data, _, __)
 {
     addTime('barcount', data.length);
@@ -199,14 +222,23 @@ function drawGraph(data, _, __)
     addTime('bars', now() - bars_t0);
 
     var t0 = now();
-    //window.meh.setBars(data, getXValue, getYValue, 60);
+
+    var sm = sma(data, 60, getYValue);
+    function getX(dat, i) { return getXValue(data, i); }
+    function getY(dat, i) { return dat[i]; }
+
+    window.meh.canvas.remove();
+    window.meh.clear();
     window.meh.setOhlcBars(data, 60);
+    //window.meh.setBars(data, getXValue, getYValue, 60);
+    window.meh.setBars(sm, getX, getY, 60);
     addTime('MyGraph', now() - t0);
+    window.meh.canvas.appendTo('#graph2');
 
     rows = [];
     for(var i = 0; i < data.length; i++) {
         var bar = data[i];
-        rows.push([bar.BarDate, bar.Close]);
+        rows.push([bar.BarDate, bar.Close, sm[i]]);
     }
 
     t0 = now();
@@ -274,7 +306,7 @@ $(function()
     window.meh = new MyChart('#graph2');
     g = new Dygraph(document.getElementById('graph'), rows, {
         height: 200,
-        labels: ['Time', 'Close'],
+        labels: ['Time', 'Close', 'SMA'],
         xValueFormatter: function(g) { return formatDate(g); },
         xAxisLabelFormatter: function(g) { return formatDate(g); },
         yAxisLabelFormatter: function(g) { return String(g); },
