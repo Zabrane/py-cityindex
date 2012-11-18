@@ -18,21 +18,9 @@ var Series = Base.extend({
 
     setOptions: function(opts)
     {
-        this.setOption('width', opts.width, 320);
-        this.setOption('height', opts.height, 200);
         this.setOption('getLength', opts.getLength, Series.getLength);
         this.setOption('getX', opts.getX, Series.getX);
         this.setOption('getY', opts.getY, Series.getY);
-        this._initCanvas();
-    },
-
-    _initCanvas: function() {
-        this.canvas = document.createElement('CANVAS');
-        this.canvas.width = this.width;
-        this.canvas.height = this.height;
-        this.ctx = this.canvas.getContext('2d');
-        // Hack to de-blur lines.
-        this.ctx.translate(0.5, 0.5);
     },
 
     setData: function(data) {
@@ -54,7 +42,7 @@ var Series = Base.extend({
 
 
 var LineSeries = Series.extend({
-    paint: function()
+    paint: function(ctx, width, height)
     {
         var data = this.data;
         var length = this.getLength(data);
@@ -80,16 +68,13 @@ var LineSeries = Series.extend({
         xHigh += pad;
         xLow -= pad;
 
-        var xPerPt = this.width / (xHigh - xLow);
-        var yPerPt = this.height / (yHigh - yLow);
+        var xPerPt = width / (xHigh - xLow);
+        var yPerPt = height / (yHigh - yLow);
 
-        var ctx = this.ctx;
-        ctx.moveTo((getX(data, 0) - xLow) * xPerPt,
-          this.height - (getY(data, 0) - yLow) * yPerPt);
-
-        for(var i = 1; i < length; i++) {
+        ctx.beginPath();
+        for(var i = 0; i < length; i++) {
             ctx.lineTo((getX(data, i) - xLow) * xPerPt,
-              this.height - (getY(data, i) - yLow) * yPerPt);
+              height - (getY(data, i) - yLow) * yPerPt);
         }
         ctx.stroke();
     }
@@ -157,7 +142,7 @@ var CandleSeries = OhlcSeries.extend({
         }
     },
 
-    paint: function()
+    paint: function(ctx, width, height)
     {
         var data = this.data;
         var length = this.getLength(data);
@@ -178,16 +163,12 @@ var CandleSeries = OhlcSeries.extend({
         xHigh += pad;
         xLow -= pad;
 
-        var width = this.width;
-        var height = this.height;
-
         var yPerPt = height / (yHigh - yLow);
 
         var barWidth = 4;
         var barMid = Math.ceil(barWidth / 2)
-        var outerWidth = barWidth + 2;
+        var outerWidth = barWidth + Math.max(1, barWidth * 0.5);
 
-        var ctx = this.ctx;
         var j = 0;
         ctx.strokeStyle = 'rgb(80, 80, 80)';
         for(i = length - 1; i; i--) {
@@ -258,7 +239,7 @@ var MyChart = Base.extend({
 
         this.ctx = this.canvas[0].getContext('2d');
         // Hack to de-blur lines.
-        // this.ctx.translate(0.5, 0.5);
+        this.ctx.translate(0.5, 0.5);
     },
 
     remove: function()
@@ -279,11 +260,13 @@ var MyChart = Base.extend({
     redraw: function()
     {
         this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.save();
+        //this.ctx.translate(50, 0);
+
         for(var i = 0; i < this.series.length; i++) {
             var series = this.series[i];
-            series.ctx.clearRect(0, 0, series.width, series.height);
-            series.paint();
-            this.ctx.drawImage(series.canvas, 50, 0);
+            series.paint(this.ctx, this.width - 50, this.height);
         }
+        this.ctx.restore();
     }
 });

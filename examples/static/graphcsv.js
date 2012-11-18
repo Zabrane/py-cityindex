@@ -38,28 +38,43 @@ function parseCsv(s)
 }
 
 
+function convert(rows) {
+    return rows.map(function(row)
+    {
+        var bits = row[0].split('/');
+        var d = new Date(bits[2], bits[0] - 1, bits[1]);
+        return [d.getTime(), +row[1], +row[2], +row[3], +row[4]];
+    });
+}
+
+
 opts = {
     getX: function(rows, i) {
-        var bits = rows[i][0].split('/');
-        var d = new Date(bits[2], bits[0] - 1, bits[1]);
-        return d.getTime();
+        return rows[i][0];
     },
     getY: function(rows, i) {
-        return +rows[i][1];
+        return rows[i][1];
     },
     getOpen: function(rows, i) {
-        return +rows[i][1];
+        return rows[i][1];
     },
     getHigh: function(rows, i) {
-        return +rows[i][2];
+        return rows[i][2];
     },
     getLow: function(rows, i) {
-        return +rows[i][3];
+        return rows[i][3];
     },
     getClose: function(rows, i) {
-        return +rows[i][4];
+        return rows[i][4];
     }
 };
+
+
+function log()
+{
+    var args = Array.prototype.slice.apply(arguments);
+    $('#log').append(args.toSource() + '\n');
+}
 
 
 function redraw()
@@ -68,17 +83,22 @@ function redraw()
         return;
     }
 
+    $('#log').text('');
+
     var t0 = now();
-    window.lines.setData(rows);
     window.candles.setData(rows);
-    $(window.candles.canvas).appendTo('body');
-    window.chart.redraw();
-    alert(now() - t0);
+    window.candleChart.redraw();
+    log('Draw candles:', now() - t0);
+
+    window.lines.setData(rows);
+    t0 = now();
+    window.lineChart.redraw();
+    log('Draw lines:', now() - t0);
 }
 
 function onFileRead(s)
 {
-    window.rows = parseCsv(s);
+    window.rows = convert(parseCsv(s));
     window.rows = window.rows.slice(rows.length - 198);
     redraw();
 }
@@ -96,10 +116,13 @@ $(function()
     if(window.chart) {
         window.chart.remove();
     }
-    window.chart = new MyChart('body', '100%', 320);
-    window.candles = new CandleSeries(opts);
     window.lines = new LineSeries(opts);
-    window.chart.addSeries(candles);
+    window.lineChart = new MyChart('#graphs', '100%', 150);
+    window.lineChart.addSeries(window.lines);
+
+    window.candles = new CandleSeries(opts);
+    window.candleChart = new MyChart('#graphs', '100%', 150);
+    window.candleChart.addSeries(window.candles);
 
     $('button').click(redraw);
     var input = $('input').get(0);
