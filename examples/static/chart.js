@@ -47,23 +47,21 @@ var LineSeries = Series.extend({
         var data = this.data;
         var length = this.getLength(data);
 
-        var getX = this.getX;
-        var getY = this.getY;
-
         var yHigh = -Infinity;
         var yLow = Infinity;
 
         for(var i = 0; i < length; i++) {
-            yHigh = Math.max(yHigh, getY(data, i));
-            yLow = Math.min(yLow, getY(data, i));
+            var y = this.getY(data, i)
+            yHigh = Math.max(yHigh, y);
+            yLow = Math.min(yLow, y);
         }
 
         var pad = (yHigh - yLow) * 0.1;
         yHigh += pad;
         yLow -= pad;
 
-        var xLow = getX(data, 0);
-        var xHigh = getX(data, length - 1);
+        var xLow = this.getX(data, 0);
+        var xHigh = this.getX(data, length - 1);
         var pad = (xHigh - xLow) * 0.01;
         xHigh += pad;
         xLow -= pad;
@@ -72,9 +70,12 @@ var LineSeries = Series.extend({
         var yPerPt = height / (yHigh - yLow);
 
         ctx.beginPath();
+        ctx.translate(-xLow * xPerPt,
+                      height + (yLow * yPerPt));
+
         for(var i = 0; i < length; i++) {
-            ctx.lineTo((getX(data, i) - xLow) * xPerPt,
-              height - (getY(data, i) - yLow) * yPerPt);
+            ctx.lineTo(this.getX(data, i) * xPerPt,
+                      -this.getY(data, i) * yPerPt);
         }
         ctx.stroke();
     }
@@ -261,12 +262,13 @@ var MyChart = Base.extend({
     {
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctx.save();
-        //this.ctx.translate(50, 0);
+        this.ctx.translate(50, 0);
 
         for(var i = 0; i < this.series.length; i++) {
             var series = this.series[i];
             series.paint(this.ctx, this.width - 50, this.height);
         }
+        this.canvas.css('border', '2px solid #c00000');
         this.ctx.restore();
     }
 });
