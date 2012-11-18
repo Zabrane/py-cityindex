@@ -154,51 +154,43 @@ var CandleSeries = OhlcSeries.extend({
         xHigh += pad;
         xLow -= pad;
 
+        var xPerPt = width / (xHigh - xLow);
         var yPerPt = height / (yHigh - yLow);
 
         var barWidth = 4;
         var barMid = Math.ceil(barWidth / 2)
         var outerWidth = barWidth + Math.max(1, barWidth * 0.5);
 
+        ctx.translate(0, height + (yLow * yPerPt));
+        yPerPt = -yPerPt;
+
         var j = 0;
-        ctx.strokeStyle = 'rgb(80, 80, 80)';
         for(i = length - 1; i; i--) {
             var barX = width - (outerWidth * ++j);
             if(barX < 0) {
                 break;
             }
 
-            var open = this.getOpen(data, i),
-                high = this.getHigh(data, i),
-                low = this.getLow(data, i),
-                close = this.getClose(data, i);
-
+            ctx.strokeStyle = 'rgb(80, 80, 80)';
             ctx.beginPath();
-            ctx.moveTo(barX + barMid, height - ((high - yLow) * yPerPt));
-            ctx.lineTo(barX + barMid, height - ((low - yLow) * yPerPt));
-            ctx.closePath();
+            ctx.lineTo(barX + barMid, this.getHigh(data, i) * yPerPt);
+            ctx.lineTo(barX + barMid, this.getLow(data, i) * yPerPt);
             ctx.stroke();
 
-            if(open < close) {
-                var biggie = close;
-                var shortie = open;
-            } else {
-                var biggie = open;
-                var shortie = close;
-            }
-
-            var relOpen = height - (biggie - yLow) * yPerPt;
-            var relHeight = (biggie - shortie) * yPerPt;
+            var open = this.getOpen(data, i);
+            var close = this.getClose(data, i);
 
             if(close < open) {
                 ctx.fillStyle = 'rgb(255, 127, 127)';
                 ctx.strokeStyle = 'rgb(127, 0, 0)';
-                ctx.fillRect(barX, relOpen, barWidth, relHeight);
             } else {
                 ctx.fillStyle = 'rgb(127, 255, 127)';
                 ctx.strokeStyle = 'rgb(0, 127, 0)';
-                ctx.fillRect(barX, relOpen, barWidth, relHeight);
             }
+
+            var relOpen = close * yPerPt;
+            var relHeight = (close - open) * -yPerPt;
+            ctx.fillRect(barX, relOpen, barWidth, relHeight);
             ctx.strokeRect(barX, relOpen, barWidth, relHeight);
         }
     }
