@@ -73,7 +73,7 @@ opts = {
 function log()
 {
     var args = Array.prototype.slice.apply(arguments);
-    $('#log').append(args.toSource() + '\n');
+    $('#log').append(JSON.stringify(args) + '\n');
 }
 
 
@@ -87,19 +87,15 @@ function redraw()
 
     var t0 = now();
     window.candles.setData(rows);
-    window.candleChart.redraw();
-    log('Draw candles:', now() - t0);
-
     window.lines.setData(rows);
-    t0 = now();
-    window.lineChart.redraw();
+    window.chart.redraw();
     log('Draw lines:', now() - t0);
 }
 
 function onFileRead(s)
 {
     window.rows = convert(parseCsv(s));
-    window.rows = window.rows.slice(rows.length - 198);
+    //window.rows = window.rows.slice(rows.length - 198);
     redraw();
 }
 
@@ -117,12 +113,10 @@ $(function()
         window.chart.remove();
     }
     window.lines = new LineSeries(opts);
-    window.lineChart = new MyChart('#graphs', '100%', 150);
-    window.lineChart.addSeries(window.lines);
-
     window.candles = new CandleSeries(opts);
-    window.candleChart = new MyChart('#graphs', '100%', 150);
-    window.candleChart.addSeries(window.candles);
+    window.chart = new MyChart('#graphs', '100%', 150);
+    window.chart.addSeries(window.candles);
+    window.chart.addSeries(window.lines);
 
     $('button').click(redraw);
     var input = $('input').get(0);

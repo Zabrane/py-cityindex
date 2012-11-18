@@ -73,9 +73,10 @@ var LineSeries = Series.extend({
         ctx.translate(-xLow * xPerPt,
                       height + (yLow * yPerPt));
 
+        yPerPt = -yPerPt;
         for(var i = 0; i < length; i++) {
             ctx.lineTo(this.getX(data, i) * xPerPt,
-                      -this.getY(data, i) * yPerPt);
+                       this.getY(data, i) * yPerPt);
         }
         ctx.stroke();
     }
@@ -123,18 +124,12 @@ var OhlcSeries = Series.extend({
 var CandleSeries = OhlcSeries.extend({
     _getBarRange: function()
     {
-        var getLow = this.getLow;
-        var getHigh = this.getHigh;
-
-        var data = this.data;
-        var length = this.getLength(data);
-
         var low = Infinity;
         var high = -Infinity;
 
-        for(var i = 0; i < length; i++) {
-            low = Math.min(low, getLow(data, i));
-            high = Math.max(high, getHigh(data, i));
+        for(var i = 0, l = this.getLength(this.data); i < l; i++) {
+            low = Math.min(low, this.getLow(this.data, i));
+            high = Math.max(high, this.getHigh(this.data, i));
         }
 
         return {
@@ -152,11 +147,6 @@ var CandleSeries = OhlcSeries.extend({
         var pad = (yRange.high - yRange.low) * 0.1;
         var yHigh = yRange.high + pad;
         var yLow = yRange.low - pad;
-
-        var getOpen = this.getOpen,
-            getHigh = this.getHigh,
-            getLow = this.getLow,
-            getClose = this.getClose;
 
         var xLow = this.getX(data, 0);
         var xHigh = this.getX(data, length - 1);
@@ -178,10 +168,10 @@ var CandleSeries = OhlcSeries.extend({
                 break;
             }
 
-            var open = getOpen(data, i),
-                high = getHigh(data, i),
-                low = getLow(data, i),
-                close = getClose(data, i);
+            var open = this.getOpen(data, i),
+                high = this.getHigh(data, i),
+                low = this.getLow(data, i),
+                close = this.getClose(data, i);
 
             ctx.beginPath();
             ctx.moveTo(barX + barMid, height - ((high - yLow) * yPerPt));
@@ -266,7 +256,9 @@ var MyChart = Base.extend({
 
         for(var i = 0; i < this.series.length; i++) {
             var series = this.series[i];
+            this.ctx.save();
             series.paint(this.ctx, this.width - 50, this.height);
+            this.ctx.restore();
         }
         this.canvas.css('border', '2px solid #c00000');
         this.ctx.restore();
