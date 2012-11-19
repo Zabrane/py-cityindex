@@ -15,7 +15,8 @@ import base
 
 
 HEADER = ('Date', 'UnixTime', 'RecvTime', 'MarketId', 'Price',
-          'Bid', 'Offer', 'Direction', 'High', 'Low', 'Change', 'AuditId')
+          'Bid', 'Offer', 'Direction', 'High', 'Low', 'Change', 'AuditId',
+          'StatusSummary')
 
 
 def reset_tz():
@@ -41,7 +42,7 @@ def price_to_row(market, price):
     prec = market['PriceDecimalPlaces']
     return (format_ts(price['TickDate']),
             format_float(price['TickDate'], 2),
-            format_float(time.time()),
+            format_float(time.time(), 2),
             market['MarketId'],
             format_float(price['Price'], prec),
             format_float(price['Bid'], prec),
@@ -50,7 +51,8 @@ def price_to_row(market, price):
             format_float(price['High'], prec),
             format_float(price['Low'], prec),
             format_float(price['Change'], prec),
-            price['AuditId'])
+            price['AuditId'],
+            price['StatusSummary'])
 
 
 def main(opts, args, api, streamer, searcher):
