@@ -15,6 +15,16 @@ import lightstreamer
 LOG = logging.getLogger('base')
 
 
+def filename_for(opts, market, kind):
+    subbed = re.sub('[ /()]+', '_', market['Name'])
+    return 'CityIndex_%s_%s_%s_%d.csv' % (
+        'cfd' if 'CFD' in market['Name'] else 'bet',
+        kind,
+        subbed,
+        market['MarketId']
+    )
+
+
 class ThreadWaker(object):
     def __init__(self):
         self.rpipe,\

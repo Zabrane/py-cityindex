@@ -14,13 +14,6 @@ import cityindex
 import base
 
 
-def filename_for(opts, market):
-    subbed = re.sub('[ ()]+', '_', market['Name'])
-    pfx = 'cfd' if 'CFD' in market['Name'] else 'bet'
-    spn = '%s%s' % (opts.span, opts.interval[0].upper())
-    return 'CityIndex_%s_%s_%s_%d.csv' % (pfx, spn, subbed, market['MarketId'])
-
-
 def tsformat(bar):
     dt = datetime.datetime.fromtimestamp(bar['BarDate'])
     return dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -75,7 +68,9 @@ def main(opts, args, api, streamer, searcher):
             if opts.chop:
                 bars = bars[-opts.bars:]
 
-        filename = filename_for(opts, market)
+        filename = base.filename_for(opts, market,
+            kind='bars_%s%s' % (opts.span, opts.interval[0].upper()))
+
         with file(filename, 'w') as fp:
             writer = csv.writer(fp, quoting=csv.QUOTE_ALL)
             write = writer.writerow
