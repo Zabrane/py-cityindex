@@ -79,7 +79,7 @@ def main(opts, args, api, streamer, searcher):
         print '# Unknown:', ', '.join(unknown)
 
     for market_id, (ric, market) in markets.iteritems():
-        fp = file(base.filename_for(opts, market, kind='ticks'), 'a, 1')
+        fp = file(base.filename_for(opts, market, kind='ticks'), 'a', 1)
         writer = csv.writer(fp, quoting=csv.QUOTE_ALL)
         market_writer_map[market_id] = writer
         if os.path.getsize(fp.name) == 0:
