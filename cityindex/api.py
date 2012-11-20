@@ -257,3 +257,28 @@ class CiApiClient:
             'TradingAccountId': account_id,
             'maxResults': max_results
         })
+
+    def _account_id_for_market(self, market):
+        for acct in self.account_information['TradingAccounts']:
+            type_ = acct['TradingAccountType']
+            if type_.startswith(market['MarketSettingsType']):
+                return acct['TradingAccountId']
+
+    def trade(self, market, price, qty, quote=None, if_done=None,
+            close_ids=None, rollover=False, direction='buy'):
+        assert direction in ('buy', 'sell')
+        return self._post('order/newtradeorder', {
+            'MarketId': market['MarketId'],
+            'Currency': self.account_information['ClientAccountCurrency'],
+            'AutoRollover': url_bool(rollover),
+            'Direction': direction,
+            'Quantity': qty,
+            'QuoteId': quote and quote['QuoteId'],
+            'BidPrice': price['Bid'],
+            'OfferPrice': price['Offer'],
+            'AuditId': price['AuditId'],
+            'TradingAccountId': self._account_id_for_market(market),
+            #'IfDone': ...
+            'Close': close_ids
+        })
+
