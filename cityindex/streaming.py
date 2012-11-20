@@ -363,6 +363,7 @@ class CiStreamingClient(object):
                 client,
                 data_adapter=data_adapter,
                 item_ids=item_ids,
+                max_frequency='unfiltered',
                 mode=lightstreamer.MODE_MERGE,
                 schema=schema,
                 snapshot=snapshot,
