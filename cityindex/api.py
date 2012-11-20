@@ -27,8 +27,8 @@ from cityindex import util
 
 
 # Production.
-LIVE_API_URL = 'http://ciapi.cityindex.com/tradingapi/'
-TEST_API_URL = 'http://ciapipreprod.cityindextest9.co.uk/tradingapi/'
+LIVE_API_URL = 'https://ciapi.cityindex.com/tradingapi/'
+TEST_API_URL = 'https://ciapipreprod.cityindextest9.co.uk/tradingapi/'
 REQS_PER_SEC = 10
 
 
@@ -213,7 +213,11 @@ class CiApiClient:
     def market_ticks(self, market_id, ticks=1000):
         return self._get('market/%s/tickhistory' % market_id, {
             'PriceTicks': ticks
-        })
+        })['PriceTicks']
+
+    def translations(self):
+        lst = self._get('message/translation')['TranslationKeyValuePairs']
+        return dict((e['Key'], e['Value']) for e in lst)
 
     def headlines(self, source=None, category=None, max_results=50,
             culture_id=None):
