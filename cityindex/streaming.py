@@ -325,6 +325,17 @@ class CiStreamingClient(object):
         lightstreamer.STATE_* constants."""
         self._state_funcs.append(func)
 
+    def last_price(self, market_id):
+        ev = threading.Event()
+        prices = []
+        def listener(price):
+            prices.append(price)
+            ev.set()
+        self.prices.listen(listener, market_id)
+        ev.wait()
+        self.prices.unlisten(listener, market_id)
+        return prices[-1]
+
     def _create_session(self, client, adapter_set):
         client.create_session(self.api.username, adapter_set=adapter_set,
             password=self.api.session_id, keepalive_ms=1000)
