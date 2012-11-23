@@ -345,7 +345,7 @@ class CiStreamingClient(object):
         lightstreamer.dispatch(self._state_funcs, self._state_map)
         if state == lightstreamer.STATE_DISCONNECTED and not self._stopped:
             # TODO: sleep
-            self.log('adapter %r lost connection; reconnecting', adapter_set)
+            self.log.error('adapter %r lost connection; reconnecting', adapter_set)
             self._create_session(client, adapter_set)
 
     def _get_client(self, adapter_set):
