@@ -50,7 +50,6 @@ def main(opts, args, api, streamer, searcher):
         print 'Need at least one symbol to lookup.'
         return
 
-    api.login()
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
 

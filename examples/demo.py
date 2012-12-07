@@ -34,7 +34,6 @@ def main():
 
     api = cityindex.CiApiClient(cityindex.LIVE_API_URL,
         opts.username, opts.password)
-    api.login()
 
     streamer = cityindex.CiStreamingClient(cityindex.LIVE_STREAM_URL, api)
     for market in api.list_cfd_markets(max_results=1):

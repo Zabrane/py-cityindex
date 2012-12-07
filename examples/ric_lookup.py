@@ -22,8 +22,6 @@ def main(opts, args, api, streamer, searcher):
         print 'Need at least one symbol to lookup.'
         return
 
-    api.login()
-
     for i in xrange(len(args)):
         args[i] += opts.suffix or ''
 
@@ -37,7 +35,7 @@ def main(opts, args, api, streamer, searcher):
     markets, unknown = base.threaded_lookup(searcher, args)
     write('RIC', 'MarketId', 'Description')
     for unk in unknown:
-        write(ric.upper(), '-', '-')
+        write(unk.upper(), '-', '-')
     for ric, market in markets.itervalues():
         write(ric.upper(), market['MarketId'], market['Name'])
 

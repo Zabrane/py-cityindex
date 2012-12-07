@@ -1,10 +1,11 @@
 
 import Queue
+import json
 import logging
 import optparse
-import shlex
 import os
 import re
+import shlex
 import sys
 import threading
 
@@ -13,6 +14,8 @@ import lightstreamer
 
 
 LOG = logging.getLogger('base')
+CONF_PATH = os.path.expanduser('~/.py-cityindex.conf')
+SESSION_PATH = os.path.expanduser('~/.py-cityindex.session')
 
 
 def filename_for(opts, market, kind):
@@ -127,9 +130,8 @@ def parse_options():
         help='Append suffix to each symbol (e.g. .O=NASDAQ, .N=NYSE')
 
     args = sys.argv[1:]
-    conf_path = os.path.expanduser('~/.py-cityindex.conf')
-    if os.path.exists(conf_path):
-        with file(conf_path) as fp:
+    if os.path.exists(CONF_PATH):
+        with file(CONF_PATH) as fp:
             args = shlex.split(fp.readline()) + args
 
     return parser.parse_args(args)
@@ -147,7 +149,22 @@ def main_wrapper(main):
     logging.basicConfig(level=level)
     logging.getLogger('requests').setLevel(logging.WARN)
 
-    api = cityindex.CiApiClient(opts.username, opts.password)
+    key = ':'.join((opts.username, str(hash(opts.password))))
+    if os.path.exists(SESSION_PATH):
+        with file(SESSION_PATH) as fp:
+            session_cache = json.load(fp)
+    else:
+        session_cache = {}
+
+    api = cityindex.CiApiClient(opts.username, opts.password,
+        session_id=session_cache.get(key))
+    if not api.session_id:
+        api.login()
+    session_cache[key] = api.session_id
+
+    with file(SESSION_PATH, 'w') as fp:
+        json.dump(session_cache, fp, sort_keys=True, indent=True)
+
     streamer = cityindex.CiStreamingClient(api)
 
     method = api.list_spread_markets if opts.bet else api.list_cfd_markets

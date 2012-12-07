@@ -48,13 +48,12 @@ def on_trade_margin(margin):
 
 
 def main(opts, args, api, streamer, searcher):
-    api.login()
     global API
     API = api
 
     streamer.orders.listen(on_order_update)
     streamer.account_margin.listen(on_account_margin)
-    streamer.trade_margin.listen(on_trade_margin)
+    #streamer.trade_margin.listen(on_trade_margin)
 
     raw_input()
     streamer.stop()

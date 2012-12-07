@@ -16,8 +16,6 @@ def tsformat(ts):
 
 
 def main(opts, args, api, streamer, searcher):
-    api.login()
-
     keys = ('ExecutedDateTimeUtc', 'TradingAccountId', 'OrderId',
             'OpeningOrderIds', 'MarketId', 'MarketName', 'Direction',
             'OriginalQuantity', 'Quantity', 'Price', 'TradingAccountId',
