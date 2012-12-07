@@ -69,12 +69,13 @@ ORDER_STATUS_MAP = {
 class CiApiClient:
     JSON_TYPE = 'application/json; charset=utf-8'
 
-    def __init__(self, username, password, url=None, prod=True):
+    def __init__(self, username, password, session_id=None, url=None,
+            prod=True):
         self.username = username
         self.password = password
+        self.session_id = session_id
         self.url = url or (LIVE_API_URL if prod else TEST_API_URL)
         self.log = logging.getLogger('CiApiClient')
-        self.session_id = None
         self._client_account_id = None
         # Docs say no more than 50reqs/5sec.
         self._bucket = util.LeakyBucket(REQS_PER_SEC, REQS_PER_SEC)
@@ -92,19 +93,36 @@ class CiApiClient:
         req = urllib2.Request(urlparse.urljoin(self.url, path), headers={
             'Host': self._original_host
         })
-        if self.session_id:
-            req.add_header('UserName', self.username)
-            req.add_header('session', self.session_id)
         return req
 
-    def _open_raise(self, req):
+    def _make_request(self, req):
         self.log.debug('%s %s (dlen=%d)', req.get_method(), req.get_full_url(),
             len(req.get_data() or ''))
+        if self.session_id:
+            req.headers['UserName'] = self.username
+            req.headers['session'] = self.session_id
         try:
             fp = urllib2.urlopen(req)
         except urllib2.HTTPError, e:
-            raise ValueError('%d: %s' %\
-                (e.getcode(), e.read()))
+            fp = e
+        self.log.debug('%s %s HTTP %d %s', req.get_method(),
+            req.get_full_url(), fp.getcode(), fp.msg)
+        return fp
+
+    def _open_raise(self, req, create_session=True):
+        """Do all required to make an HTTP request, paying attention to whether
+        login is required, and trying to relogin once if our session has
+        expired."""
+        if create_session and not self.session_id:
+            self.login()
+
+        fp = self._make_request(req)
+        if fp.getcode() == 401 and create_session:
+            self.login()
+            fp = self._make_request(req)
+
+        if fp.getcode() != 200:
+            raise ValueError('%d: %s' % (fp.getcode(), fp.read()))
 
         raw = fp.read()
         try:
@@ -112,11 +130,11 @@ class CiApiClient:
         except ValueError, e:
             raise ValueError('%r (%r)' % (e, raw))
 
-    def _post(self, path, dct):
+    def _post(self, path, dct, create_session=True):
         req = self._request(path)
         req.add_header('Content-Type', self.JSON_TYPE)
         req.add_data(json.dumps(dct))
-        return self._open_raise(req)
+        return self._open_raise(req, create_session)
 
     def _get(self, path, dct=None):
         if dct:
@@ -140,7 +158,7 @@ class CiApiClient:
         dct = self._post('session', {
             'UserName': self.username,
             'Password': self.password
-        })
+        }, create_session=False)
         self.session_id = dct['Session']
 
     def market_search(self, q):
