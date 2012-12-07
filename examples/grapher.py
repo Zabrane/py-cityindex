@@ -207,7 +207,6 @@ def on_bars():
 def main(opts, args, api, streamer, searcher):
     global API, SEARCHER, STREAMER, OPTS
     API = api
-    api.login()
     SEARCHER = searcher
     STREAMER = streamer
     OPTS = opts
