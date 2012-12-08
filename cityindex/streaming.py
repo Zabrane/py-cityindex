@@ -18,6 +18,7 @@ from __future__ import absolute_import
 
 import logging
 import threading
+import time
 
 from cityindex import util
 import lightstreamer
@@ -161,13 +162,13 @@ TRADE_MARGIN_FIELDS = (
 )
 
 
-def make_row_factory(fields):
+def make_item_factory(fields):
     """Return a function that, when passed a sequence of strings-or-None,
     passes each value through a converter function if it is non-None, and uses
     the result to form a dict.
 
     Example:
-        >>> func = make_row_factory([
+        >>> func = make_item_factory([
         ...     ('FieldA', float),
         ...     ('FieldB', unicode),
         ...     ('FieldC', int)
@@ -175,10 +176,10 @@ def make_row_factory(fields):
         >>> print func(['1234', 'test', None])
         {'FieldA': 1234.0, 'FieldB': u'test', 'FieldC': None}
     """
-    def row_factory(row):
+    def item_factory(row):
         return dict((key, conv(row[i]) if row[i] is not None else None)
                     for i, (key, conv) in enumerate(fields))
-    return row_factory
+    return item_factory
 
 
 class TableManager(object):
@@ -203,11 +204,15 @@ class TableManager(object):
         """Subscribe `func` to updates for `item_ids``."""
         item_ids = self._make_ids(item_ids)
         with self._lock:
-            if item_ids not in self.table_map:
-                self.table_map[item_ids] = self.table_factory(item_ids)
-                self.table_map[item_ids].on_update(
+            table = self.table_map.get(item_ids)
+            if not table:
+                table = self.table_factory(item_ids)
+                self.table_map[item_ids] = table
+                self.table_map[item_ids].on_update.listen(
                     lambda item_id, row: self._on_update(item_ids, row))
             self.func_map.setdefault(item_ids, set()).add(func)
+            if table.items:
+                func(next(table.items.itervalues()))
 
     def unlisten(self, func, item_ids=None):
         """Unsubscribe `func` from updates for `item_ids`, destroying the
@@ -344,8 +349,8 @@ class CiStreamingClient(object):
         self._state_map[adapter_set] = state
         lightstreamer.dispatch(self._state_funcs, self._state_map)
         if state == lightstreamer.STATE_DISCONNECTED and not self._stopped:
-            # TODO: sleep
             self.log.error('adapter %r lost connection; reconnecting', adapter_set)
+            time.sleep(1)
             self._create_session(client, adapter_set)
 
     def _get_client(self, adapter_set):
@@ -354,7 +359,7 @@ class CiStreamingClient(object):
             client = self._client_map.get(adapter_set)
             if not client:
                 client = lightstreamer.LsClient(self.url, content_length=1<<20)
-                client.on_state(lambda state: \
+                client.on_state.listen(lambda state: \
                     self._on_client_state(client, adapter_set, state))
                 self._create_session(client, adapter_set)
                 self._client_map[adapter_set] = client
@@ -367,7 +372,7 @@ class CiStreamingClient(object):
         `data_adapter`, with a row factory coresponding to `fields`"""
         client = self._get_client(adapter_set)
         schema = ' '.join(p[0] for p in fields)
-        row_factory = make_row_factory(fields)
+        item_factory = make_item_factory(fields)
 
         def table_factory(item_ids):
             return lightstreamer.Table(
@@ -378,7 +383,7 @@ class CiStreamingClient(object):
                 mode=lightstreamer.MODE_MERGE,
                 schema=schema,
                 snapshot=snapshot,
-                row_factory=row_factory
+                item_factory=item_factory
             )
         return table_factory
 
